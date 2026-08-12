@@ -45,7 +45,9 @@ export function UserTable({ currentUserId }: { currentUserId: string }) {
     mutationFn: async (vars: { userId: string; role: AppRole | null }) => {
       const { error } = await supabase.rpc("set_user_role", {
         _target: vars.userId,
-        _role: vars.role,
+        // `null` = revogar papel. A função aceita NULL no banco, mas os tipos
+        // gerados declaram o argumento como não anulável.
+        _role: vars.role as AppRole,
       });
       if (error) throw error;
     },
