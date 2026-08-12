@@ -363,7 +363,11 @@ export function BoardGrid({
         {/* AllocationDialog fica fora do condicional: não depende de projeto
             (o cartão herda o da pessoa no banco) e envolvê-lo remontaria o
             diálogo sem motivo. */}
-        <AllocationDialog draft={draft} onOpenChange={(o) => !o && setDraft(null)} />
+        <AllocationDialog
+          draft={draft}
+          project={project}
+          onOpenChange={(o) => !o && setDraft(null)}
+        />
         <DevDialog
           dev={devDialog.dev}
           open={devDialog.open}
