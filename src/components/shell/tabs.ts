@@ -8,16 +8,16 @@ import { ClipboardList, Dices, LayoutGrid, Timer, type LucideIcon } from "lucide
  *
  * A ordem é a do jira-live (`static/index.html` 112-115, no commit 7d6b618):
  * Compromisso → Cycle Time → Retrospectivas → Alocação. "Alocações" é a QUARTA
- * guia e mora em `/` — divergência deliberada registrada na spec: `/` é a home
- * histórica do produto e o destino de `admin`/`aceitar-convite`. A ordem da
- * barra é fiel; o destino de `/` não muda.
+ * guia e agora mora em `/alocacoes`, como as outras três — `/` passou a ser só
+ * um redirect para `/alocacoes` (ver `_shell/index.tsx`), preservado como alias
+ * porque `admin`/`aceitar-convite`/404 apontam para `/`.
  *
  * `id` existe para a marcação ARIA: cada guia recebe `id={"tab-" + id}` e o
  * `role="tabpanel"` aponta para o `id` da guia ativa via `aria-labelledby`.
  */
 export type TabDef = {
   id: string;
-  to: "/compromisso" | "/cycle-time" | "/retrospectivas" | "/";
+  to: "/compromisso" | "/cycle-time" | "/retrospectivas" | "/alocacoes";
   label: string;
   icon: LucideIcon;
 };
@@ -26,5 +26,5 @@ export const TABS = [
   { id: "compromisso", to: "/compromisso", label: "Compromisso", icon: ClipboardList },
   { id: "cycle-time", to: "/cycle-time", label: "Cycle Time", icon: Timer },
   { id: "retrospectivas", to: "/retrospectivas", label: "Retrospectivas", icon: Dices },
-  { id: "alocacoes", to: "/", label: "Alocações", icon: LayoutGrid },
+  { id: "alocacoes", to: "/alocacoes", label: "Alocações", icon: LayoutGrid },
 ] as const satisfies readonly TabDef[];

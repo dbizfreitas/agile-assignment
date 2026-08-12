@@ -30,7 +30,7 @@ export function AppShell({
   // de `activeProps`/`inactiveProps` do próprio <Link>, que é o roteador
   // respondendo — não um segundo cálculo nosso.
   const pathname = useLocation({ select: (l) => l.pathname });
-  const activeTab = TABS.find((t) => (t.to === "/" ? pathname === "/" : pathname.startsWith(t.to)));
+  const activeTab = TABS.find((t) => pathname.startsWith(t.to));
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
@@ -76,8 +76,6 @@ export function AppShell({
                 id={`tab-${tab.id}`}
                 role="tab"
                 to={tab.to}
-                // `exact` é obrigatório para a guia `/`: sem ele, o casamento
-                // por prefixo deixaria Alocações ativa em todas as rotas.
                 activeOptions={{ exact: true }}
                 activeProps={{
                   "aria-selected": true,
