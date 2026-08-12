@@ -103,7 +103,10 @@ export function DevDialog({
       };
       const res = dev
         ? await supabase.from("devs").update(payload).eq("id", dev.id)
-        : await supabase.from("devs").insert(payload);
+        : // `jira_project` é obrigatório no insert; o trigger devs_set_project
+          // recalcula a partir do time, então mandar o projeto da tela é
+          // apenas o valor correto de partida.
+          await supabase.from("devs").insert({ ...payload, jira_project: project });
       if (res.error) throw res.error;
     },
     onSuccess: () => {
