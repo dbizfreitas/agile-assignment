@@ -1,29 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { BoardGrid } from "@/components/BoardGrid";
-import { useShell } from "@/components/shell/shell-context";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-const DESCRIPTION =
-  "Alocações de sprints × pessoas, com status coloridos, tickets, férias e realocação por arrastar e soltar.";
-
+/**
+ * `/` deixou de renderizar Alocações diretamente e passou a redirecionar para
+ * `/alocacoes`. Fica como alias: `admin.tsx` ("Voltar para Alocações"),
+ * `aceitar-convite.tsx` (pós-convite) e o 404 do `__root.tsx` apontam para `/`
+ * e continuam funcionando sem alteração.
+ */
 export const Route = createFileRoute("/_shell/")({
-  ssr: false,
-  head: () => ({
-    meta: [
-      { title: "Alocações — Sprint Board" },
-      { name: "description", content: DESCRIPTION },
-      { property: "og:title", content: "Alocações — Sprint Board" },
-      { property: "og:description", content: DESCRIPTION },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
-  component: AlocacoesPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/alocacoes" });
+  },
 });
-
-function AlocacoesPage() {
-  // Sessão, papel e projeto já foram resolvidos pela casca. `email` e `isAdmin`
-  // não são mais repassados: o logout e o link "Usuários" moram no cabeçalho
-  // compartilhado.
-  const { canEdit, project } = useShell();
-  return <BoardGrid canEdit={canEdit} project={project} />;
-}

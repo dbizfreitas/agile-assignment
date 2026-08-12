@@ -13,6 +13,7 @@ import { Route as ShellRouteImport } from './routes/_shell'
 import { Route as AceitarConviteRouteImport } from './routes/aceitar-convite'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ShellIndexRouteImport } from './routes/_shell/index'
+import { Route as ShellAlocacoesRouteImport } from './routes/_shell/alocacoes'
 import { Route as ShellCompromissoRouteImport } from './routes/_shell/compromisso'
 import { Route as ShellCycleTimeRouteImport } from './routes/_shell/cycle-time'
 import { Route as ShellRetrospectivasRouteImport } from './routes/_shell/retrospectivas'
@@ -36,6 +37,11 @@ const ShellIndexRoute = ShellIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ShellRoute,
 } as any)
+const ShellAlocacoesRoute = ShellAlocacoesRouteImport.update({
+  id: '/alocacoes',
+  path: '/alocacoes',
+  getParentRoute: () => ShellRoute,
+} as any)
 const ShellCompromissoRoute = ShellCompromissoRouteImport.update({
   id: '/compromisso',
   path: '/compromisso',
@@ -56,6 +62,7 @@ export interface FileRoutesByFullPath {
   '/': typeof ShellIndexRoute
   '/aceitar-convite': typeof AceitarConviteRoute
   '/admin': typeof AdminRoute
+  '/alocacoes': typeof ShellAlocacoesRoute
   '/compromisso': typeof ShellCompromissoRoute
   '/cycle-time': typeof ShellCycleTimeRoute
   '/retrospectivas': typeof ShellRetrospectivasRoute
@@ -63,6 +70,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/aceitar-convite': typeof AceitarConviteRoute
   '/admin': typeof AdminRoute
+  '/alocacoes': typeof ShellAlocacoesRoute
   '/compromisso': typeof ShellCompromissoRoute
   '/cycle-time': typeof ShellCycleTimeRoute
   '/retrospectivas': typeof ShellRetrospectivasRoute
@@ -73,6 +81,7 @@ export interface FileRoutesById {
   '/_shell': typeof ShellRouteWithChildren
   '/aceitar-convite': typeof AceitarConviteRoute
   '/admin': typeof AdminRoute
+  '/_shell/alocacoes': typeof ShellAlocacoesRoute
   '/_shell/compromisso': typeof ShellCompromissoRoute
   '/_shell/cycle-time': typeof ShellCycleTimeRoute
   '/_shell/retrospectivas': typeof ShellRetrospectivasRoute
@@ -84,6 +93,7 @@ export interface FileRouteTypes {
     | '/'
     | '/aceitar-convite'
     | '/admin'
+    | '/alocacoes'
     | '/compromisso'
     | '/cycle-time'
     | '/retrospectivas'
@@ -91,6 +101,7 @@ export interface FileRouteTypes {
   to:
     | '/aceitar-convite'
     | '/admin'
+    | '/alocacoes'
     | '/compromisso'
     | '/cycle-time'
     | '/retrospectivas'
@@ -100,6 +111,7 @@ export interface FileRouteTypes {
     | '/_shell'
     | '/aceitar-convite'
     | '/admin'
+    | '/_shell/alocacoes'
     | '/_shell/compromisso'
     | '/_shell/cycle-time'
     | '/_shell/retrospectivas'
@@ -142,6 +154,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellIndexRouteImport
       parentRoute: typeof ShellRoute
     }
+    '/_shell/alocacoes': {
+      id: '/_shell/alocacoes'
+      path: '/alocacoes'
+      fullPath: '/alocacoes'
+      preLoaderRoute: typeof ShellAlocacoesRouteImport
+      parentRoute: typeof ShellRoute
+    }
     '/_shell/compromisso': {
       id: '/_shell/compromisso'
       path: '/compromisso'
@@ -167,6 +186,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface ShellRouteChildren {
+  ShellAlocacoesRoute: typeof ShellAlocacoesRoute
   ShellCompromissoRoute: typeof ShellCompromissoRoute
   ShellCycleTimeRoute: typeof ShellCycleTimeRoute
   ShellRetrospectivasRoute: typeof ShellRetrospectivasRoute
@@ -174,6 +194,7 @@ interface ShellRouteChildren {
 }
 
 const ShellRouteChildren: ShellRouteChildren = {
+  ShellAlocacoesRoute: ShellAlocacoesRoute,
   ShellCompromissoRoute: ShellCompromissoRoute,
   ShellCycleTimeRoute: ShellCycleTimeRoute,
   ShellRetrospectivasRoute: ShellRetrospectivasRoute,
