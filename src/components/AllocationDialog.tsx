@@ -28,6 +28,7 @@ import {
   type AllocationStatus,
   type AllocationTipo,
 } from "@/lib/board";
+import type { JiraProjectKey } from "@/lib/projects";
 
 export type AllocationDraft = {
   id?: string;
@@ -43,9 +44,12 @@ export type AllocationDraft = {
 
 export function AllocationDialog({
   draft,
+  project,
   onOpenChange,
 }: {
   draft: AllocationDraft | null;
+  /** Obrigatório no insert; o cartão nasce no projeto da tela. */
+  project: JiraProjectKey;
   onOpenChange: (open: boolean) => void;
 }) {
   const qc = useQueryClient();
@@ -81,7 +85,7 @@ export function AllocationDialog({
       };
       const res = draft.id
         ? await supabase.from("allocations").update(payload).eq("id", draft.id)
-        : await supabase.from("allocations").insert(payload);
+        : await supabase.from("allocations").insert({ ...payload, jira_project: project });
       if (res.error) throw res.error;
     },
     onSuccess: () => {
