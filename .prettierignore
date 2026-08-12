@@ -1,0 +1,12 @@
+node_modules
+dist
+.output
+.vinxi
+pnpm-lock.yaml
+package-lock.json
+bun.lock
+routeTree.gen.ts
+
+# Cache de fotos da retro — 1,3 MB numa linha só. `prettier --write .` não lê o
+# .gitignore e tentaria reformatar o arquivo inteiro a cada execução.
+src/lib/retrospectivas/photos-cache.ts

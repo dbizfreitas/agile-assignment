@@ -1,0 +1,242 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+/* Drives the `dark:` variant and the .dark token overrides below — toggled
+   by src/hooks/use-theme.ts. */
+@custom-variant dark (&:is(.dark *));
+
+
+/*
+ * Design system definition.
+ *
+ * The @theme inline block maps CSS custom properties to Tailwind utility
+ * classes (e.g. --color-primary -> bg-primary, text-primary).
+ *
+ * There are TWO :root/.dark pairs in this file — one for the shadcn base
+ * tokens right below this comment, and a second one further down (labeled
+ * "Sprint Board — design system") for this app's own tokens (surface,
+ * grid-line, header, st-*). Each :root holds LIGHT values; the .dark block
+ * immediately below it holds DARK values for that same set of variables
+ * (applied by toggling the `dark` class on <html>, see
+ * src/hooks/use-theme.ts). Both pairs are matched 1:1 to the Way2 "Visão
+ * Agile" dashboard (apontamentos.way2.com.br) so both internal tools share
+ * one design system in either mode. Values are written as hsl()/rgba() to
+ * stay traceable to the values measured on that reference dashboard.
+ *
+ * To add a new semantic color:
+ * 1. Add the variable to the RIGHT :root/.dark pair for what it belongs to
+ *    (shadcn base token vs. board-specific token) — light value in :root,
+ *    dark value in .dark. A variable added to the wrong pair's :root is a
+ *    silent bug: :root and .dark share specificity, so whichever comes
+ *    later in the file wins the cascade, with no build error to catch it.
+ * 2. Register it in @theme inline as --color-<name>: var(--<name>)
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* shadcn base tokens — light */
+:root {
+  --radius: 0.5rem;
+  color-scheme: light;
+
+  --background: hsl(0 0% 98%);
+  --foreground: hsl(217 33% 17%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(217 33% 17%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(217 33% 17%);
+
+  --primary: hsl(212 100% 40%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(210 40% 96%);
+  --secondary-foreground: hsl(217 33% 17%);
+  --muted: hsl(210 40% 96%);
+  --muted-foreground: hsl(215 16% 47%);
+  --accent: hsl(212 100% 95%);
+  --accent-foreground: hsl(212 100% 40%);
+  --destructive: hsl(0 84% 60%);
+  --destructive-foreground: hsl(210 40% 98%);
+  --border: hsl(214 32% 91%);
+  --input: hsl(214 32% 91%);
+  --ring: hsl(212 100% 40%);
+
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: hsl(0 0% 100%);
+  --sidebar-foreground: hsl(217 33% 17%);
+  --sidebar-primary: hsl(212 100% 40%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(210 40% 96%);
+  --sidebar-accent-foreground: hsl(217 33% 17%);
+  --sidebar-border: hsl(214 32% 91%);
+  --sidebar-ring: hsl(212 100% 40%);
+}
+
+/* shadcn base tokens — dark */
+.dark {
+  color-scheme: dark;
+
+  --background: hsl(217 33% 10%);
+  --foreground: hsl(210 40% 98%);
+  --card: hsl(217 33% 13%);
+  --card-foreground: hsl(210 40% 98%);
+  --popover: hsl(217 33% 13%);
+  --popover-foreground: hsl(210 40% 98%);
+
+  --primary: hsl(212 100% 50%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(217 33% 17%);
+  --secondary-foreground: hsl(210 40% 98%);
+  --muted: hsl(217 33% 17%);
+  --muted-foreground: hsl(215 20% 65%);
+  --accent: hsl(217 33% 20%);
+  --accent-foreground: hsl(210 40% 98%);
+  --destructive: hsl(0 63% 31%);
+  --destructive-foreground: hsl(210 40% 98%);
+  --border: hsl(217 33% 17%);
+  --input: hsl(217 33% 17%);
+  --ring: hsl(212 100% 50%);
+
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: hsl(217 33% 13%);
+  --sidebar-foreground: hsl(210 40% 98%);
+  --sidebar-primary: hsl(212 100% 50%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(217 33% 17%);
+  --sidebar-accent-foreground: hsl(210 40% 98%);
+  --sidebar-border: hsl(217 33% 17%);
+  --sidebar-ring: hsl(212 100% 50%);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+}
+
+/* ---------------------------------------------------------------
+ * Sprint Board — design system
+ * Matches the Way2 "Visão Agile" dashboard in both light and dark:
+ * vivid blue primary, semantic status colours (blue/amber/red/green).
+ * ------------------------------------------------------------- */
+
+@theme inline {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-grid-line: var(--grid-line);
+  --color-header: var(--header);
+  --color-header-foreground: var(--header-foreground);
+
+  --color-st-nao-especificada: var(--st-nao-especificada);
+  --color-st-nao-especificada-fg: var(--st-nao-especificada-fg);
+  --color-st-especificada: var(--st-especificada);
+  --color-st-especificada-fg: var(--st-especificada-fg);
+  --color-st-bug: var(--st-bug);
+  --color-st-bug-fg: var(--st-bug-fg);
+  --color-st-ferias: var(--st-ferias);
+  --color-st-ferias-fg: var(--st-ferias-fg);
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.24), 0 1px 1px rgb(0 0 0 / 0.16);
+  --shadow-pop: 0 10px 30px -10px rgb(0 0 0 / 0.45);
+}
+
+/* board tokens — light */
+:root {
+  --surface: var(--card);
+  --surface-2: hsl(210 40% 98%);
+  --grid-line: hsl(214 32% 85%);
+  --header: var(--card);
+  --header-foreground: var(--foreground);
+
+  --st-nao-especificada: rgba(234, 179, 8, 0.1);
+  --st-nao-especificada-fg: #a16207;
+  --st-especificada: rgba(59, 130, 246, 0.1);
+  --st-especificada-fg: #2563eb;
+  --st-bug: rgba(239, 68, 68, 0.1);
+  --st-bug-fg: #b91c1c;
+  --st-ferias: rgba(34, 197, 94, 0.1);
+  --st-ferias-fg: #15803d;
+}
+
+/* board tokens — dark */
+.dark {
+  --surface-2: hsl(217 33% 15%);
+  --grid-line: hsl(217 33% 22%);
+
+  --st-nao-especificada: rgba(234, 179, 8, 0.12);
+  --st-nao-especificada-fg: #facc15;
+  --st-especificada: rgba(59, 130, 246, 0.12);
+  --st-especificada-fg: #60a5fa;
+  --st-bug: rgba(239, 68, 68, 0.12);
+  --st-bug-fg: #f87171;
+  --st-ferias: rgba(34, 197, 94, 0.12);
+  --st-ferias-fg: #4ade80;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@utility board-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--grid-line) transparent;
+}
