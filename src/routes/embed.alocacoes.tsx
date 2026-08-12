@@ -33,11 +33,14 @@ function storedProject(): JiraProjectKey | null {
 export const Route = createFileRoute("/embed/alocacoes")({
   // Sessão do Supabase e localStorage são lidos no boot, como na casca.
   ssr: false,
-  validateSearch: (search: Record<string, unknown>) => ({
-    project: isJiraProjectKey(typeof search.project === "string" ? search.project : null)
-      ? (search.project as JiraProjectKey)
-      : undefined,
-  }),
+  validateSearch: (search: Record<string, unknown>) => {
+    const raw = search["project"];
+    return {
+      project: isJiraProjectKey(typeof raw === "string" ? raw : null)
+        ? (raw as JiraProjectKey)
+        : undefined,
+    };
+  },
   head: () => ({
     meta: [
       { title: "Alocações (embed) — Sprint Board" },
