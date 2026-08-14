@@ -77,7 +77,7 @@ export function AllocationDialog({
     setTickets((prev) =>
       prev.map((t, i) => {
         if (i !== index) return t;
-        const url = t.url?.trim() ? t.url : value.trim() ? jiraUrlFor(value.trim()) : null;
+        const url = t.url?.trim() ? t.url : value.trim() ? jiraUrlFor(value.trim().toUpperCase()) : null;
         return { key: value, url };
       }),
     );
@@ -117,7 +117,7 @@ export function AllocationDialog({
         title: title.trim(),
         tickets: tickets
           .filter((t) => t.key.trim() || t.url?.trim())
-          .map((t) => ({ key: t.key.trim(), url: t.url?.trim() || null })),
+          .map((t) => ({ key: t.key.trim().toUpperCase(), url: t.url?.trim() || null })),
         status,
         tipo,
         notes: notes.trim() || null,
