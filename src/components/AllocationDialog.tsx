@@ -225,34 +225,38 @@ export function AllocationDialog({
           <div className="space-y-1.5">
             <Label>Tickets</Label>
             <div className="space-y-2">
-              {tickets.map((t, i) => (
-                <div key={i} className="flex gap-2">
-                  <div className="grid flex-1 grid-cols-2 gap-2">
-                    <Input
-                      value={t.key}
-                      onChange={(e) => handleTicketKeyChange(i, e.target.value)}
-                      onPaste={(e) => handleTicketPaste(i, e)}
-                      placeholder="PIM-7862"
-                      aria-label="Chave do ticket"
-                    />
-                    <Input
-                      value={t.url ?? ""}
-                      onChange={(e) => handleTicketUrlChange(i, e.target.value)}
-                      onPaste={(e) => handleTicketPaste(i, e)}
-                      placeholder="https://..."
-                      aria-label="Link do ticket"
-                    />
+              {/* max-h-32 ≈ 3 linhas (h-9 cada + gap-2) — a 4ª em diante rola só
+                  aqui dentro, sem esticar o diálogo inteiro. */}
+              <div className="max-h-32 space-y-2 overflow-y-auto pr-1">
+                {tickets.map((t, i) => (
+                  <div key={i} className="flex gap-2">
+                    <div className="grid flex-1 grid-cols-2 gap-2">
+                      <Input
+                        value={t.key}
+                        onChange={(e) => handleTicketKeyChange(i, e.target.value)}
+                        onPaste={(e) => handleTicketPaste(i, e)}
+                        placeholder="PIM-7862"
+                        aria-label="Chave do ticket"
+                      />
+                      <Input
+                        value={t.url ?? ""}
+                        onChange={(e) => handleTicketUrlChange(i, e.target.value)}
+                        onPaste={(e) => handleTicketPaste(i, e)}
+                        placeholder="https://..."
+                        aria-label="Link do ticket"
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => removeTicketRow(i)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={() => removeTicketRow(i)}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-              ))}
+                ))}
+              </div>
               <Button variant="outline" size="sm" onClick={addTicketRow}>
                 <Plus className="size-3.5" /> Ticket
               </Button>
