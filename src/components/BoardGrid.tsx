@@ -17,6 +17,7 @@ import {
   TIPO_LIST,
   type Allocation,
   type AllocationStatus,
+  type AllocationTicket,
   type AllocationTipo,
   type Dev,
   type Sprint,
@@ -487,6 +488,39 @@ function SprintRow({
   );
 }
 
+/** 1º ticket + contador (`PIM-7862 +2`) — mesmo resumo no card e no hover, nunca a lista inteira. */
+function TicketSummary({
+  tickets,
+  className,
+  stopPropagation,
+}: {
+  tickets: AllocationTicket[];
+  className?: string;
+  stopPropagation?: boolean;
+}) {
+  if (tickets.length === 0) return null;
+  const first = tickets[0]!;
+  return (
+    <span className={`inline-flex items-center gap-0.5 ${className ?? ""}`}>
+      {first.url ? (
+        <a
+          href={first.url}
+          target="_blank"
+          rel="noreferrer"
+          onClick={stopPropagation ? (e) => e.stopPropagation() : undefined}
+          className="inline-flex items-center gap-0.5 font-mono underline underline-offset-2"
+        >
+          {first.key}
+          <ExternalLink className="size-2.5" />
+        </a>
+      ) : (
+        <span className="font-mono">{first.key}</span>
+      )}
+      {tickets.length > 1 ? <span className="font-mono">+{tickets.length - 1}</span> : null}
+    </span>
+  );
+}
+
 function AllocationChip({
   allocation,
   dimmed,
@@ -521,27 +555,7 @@ function AllocationChip({
           </p>
           {allowWrap && (allocation.tickets.length > 0 || allocation.notes) ? (
             <div className="mt-1 flex items-center gap-1.5 text-[10px] opacity-80">
-              {allocation.tickets.length > 0 ? (
-                <span className="inline-flex items-center gap-0.5">
-                  {allocation.tickets[0]!.url ? (
-                    <a
-                      href={allocation.tickets[0]!.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-0.5 font-mono underline underline-offset-2"
-                    >
-                      {allocation.tickets[0]!.key}
-                      <ExternalLink className="size-2.5" />
-                    </a>
-                  ) : (
-                    <span className="font-mono">{allocation.tickets[0]!.key}</span>
-                  )}
-                  {allocation.tickets.length > 1 ? (
-                    <span className="font-mono">+{allocation.tickets.length - 1}</span>
-                  ) : null}
-                </span>
-              ) : null}
+              <TicketSummary tickets={allocation.tickets} stopPropagation />
               {allocation.notes ? <span className="truncate">{allocation.notes}</span> : null}
             </div>
           ) : null}
@@ -558,28 +572,7 @@ function AllocationChip({
             {tipoInfo(allocation.tipo).label}
           </span>
         </div>
-        {allocation.tickets.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {allocation.tickets.map((t, i) =>
-              t.url ? (
-                <a
-                  key={i}
-                  href={t.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-0.5 font-mono text-xs underline underline-offset-2"
-                >
-                  {t.key}
-                  <ExternalLink className="size-2.5" />
-                </a>
-              ) : (
-                <span key={i} className="font-mono text-xs">
-                  {t.key}
-                </span>
-              ),
-            )}
-          </div>
-        ) : null}
+        <TicketSummary tickets={allocation.tickets} className="text-xs" />
         <p className="text-sm font-medium leading-snug">{allocation.title}</p>
         {allocation.notes ? (
           <p className="text-xs text-muted-foreground">{allocation.notes}</p>
