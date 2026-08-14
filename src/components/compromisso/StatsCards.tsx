@@ -9,9 +9,8 @@ import {
   type SprintDataLike,
 } from "@/lib/compromisso/calc";
 import type { IssueResponse } from "@/lib/compromisso/types";
+import { JIRA_BASE } from "@/lib/jira-base";
 import type { ViewMode } from "./CompromissoSidebar";
-
-const JIRA_BASE = "https://way2agile.atlassian.net";
 
 function openJql(keys: string[]) {
   const jql = `key in (${keys.join(", ")})`;
