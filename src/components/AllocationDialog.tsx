@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -59,6 +59,8 @@ export function AllocationDialog({
   const [status, setStatus] = useState<AllocationStatus>("nao_especificada");
   const [tipo, setTipo] = useState<AllocationTipo>("planejado");
   const [notes, setNotes] = useState("");
+  const ticketsListRef = useRef<HTMLDivElement>(null);
+  const prevTicketsCount = useRef(0);
 
   useEffect(() => {
     if (!draft) return;
@@ -67,7 +69,21 @@ export function AllocationDialog({
     setStatus(draft.status ?? "nao_especificada");
     setTipo(draft.tipo ?? "planejado");
     setNotes(draft.notes ?? "");
+    // Evita que o carregamento inicial dos tickets do draft seja lido como
+    // "linha adicionada" pelo efeito de auto-scroll abaixo (abrir uma demanda
+    // com vários tickets já deve mostrar do topo, não pular pro último).
+    prevTicketsCount.current = (draft.tickets ?? []).length;
   }, [draft]);
+
+  // Rola para o final da lista sempre que uma linha é ADICIONADA (digitar +
+  // Ticket, ou colar vários de uma vez) — a mais recente fica sempre visível,
+  // sem precisar rolar manualmente. Remoção/edição não mexe no scroll.
+  useEffect(() => {
+    if (tickets.length > prevTicketsCount.current && ticketsListRef.current) {
+      ticketsListRef.current.scrollTop = ticketsListRef.current.scrollHeight;
+    }
+    prevTicketsCount.current = tickets.length;
+  }, [tickets.length]);
 
   const addTicketRow = () => setTickets((prev) => [...prev, { key: "", url: null }]);
   const removeTicketRow = (index: number) =>
@@ -226,8 +242,9 @@ export function AllocationDialog({
             <Label>Tickets</Label>
             <div className="space-y-2">
               {/* max-h-32 ≈ 3 linhas (h-9 cada + gap-2) — a 4ª em diante rola só
-                  aqui dentro, sem esticar o diálogo inteiro. */}
-              <div className="max-h-32 space-y-2 overflow-y-auto pr-1">
+                  aqui dentro, sem esticar o diálogo inteiro. Auto-rola para o
+                  fim ao adicionar linha, para a mais nova ficar sempre visível. */}
+              <div ref={ticketsListRef} className="max-h-32 space-y-2 overflow-y-auto pr-1">
                 {tickets.map((t, i) => (
                   <div key={i} className="flex gap-2">
                     <div className="grid flex-1 grid-cols-2 gap-2">
