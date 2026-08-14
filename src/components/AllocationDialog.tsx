@@ -89,7 +89,7 @@ export function AllocationDialog({
       if (res.error) throw res.error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["allocations"] });
+      qc.invalidateQueries({ queryKey: ["board", "allocations"] });
       onOpenChange(false);
     },
     onError: (e: Error) => toast.error(e.message),
@@ -102,7 +102,7 @@ export function AllocationDialog({
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["allocations"] });
+      qc.invalidateQueries({ queryKey: ["board", "allocations"] });
       onOpenChange(false);
     },
     onError: (e: Error) => toast.error(e.message),
