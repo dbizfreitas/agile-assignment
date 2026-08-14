@@ -20,23 +20,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import {
   STATUS_LIST,
   TIPO_LIST,
   type Allocation,
   type AllocationStatus,
+  type AllocationTicket,
   type AllocationTipo,
 } from "@/lib/board";
 import type { JiraProjectKey } from "@/lib/projects";
+import { extractJiraKey, jiraUrlFor, parseTicketTokens } from "@/lib/tickets";
 
 export type AllocationDraft = {
   id?: string;
   sprint_id: string;
   dev_id: string;
   title?: string;
-  ticket_key?: string | null;
-  ticket_url?: string | null;
+  tickets?: AllocationTicket[];
   status?: AllocationStatus;
   tipo?: AllocationTipo;
   notes?: string | null;
@@ -54,8 +55,7 @@ export function AllocationDialog({
 }) {
   const qc = useQueryClient();
   const [title, setTitle] = useState("");
-  const [ticketKey, setTicketKey] = useState("");
-  const [ticketUrl, setTicketUrl] = useState("");
+  const [tickets, setTickets] = useState<AllocationTicket[]>([]);
   const [status, setStatus] = useState<AllocationStatus>("nao_especificada");
   const [tipo, setTipo] = useState<AllocationTipo>("planejado");
   const [notes, setNotes] = useState("");
@@ -63,12 +63,50 @@ export function AllocationDialog({
   useEffect(() => {
     if (!draft) return;
     setTitle(draft.title ?? "");
-    setTicketKey(draft.ticket_key ?? "");
-    setTicketUrl(draft.ticket_url ?? "");
+    setTickets(draft.tickets ?? []);
     setStatus(draft.status ?? "nao_especificada");
     setTipo(draft.tipo ?? "planejado");
     setNotes(draft.notes ?? "");
   }, [draft]);
+
+  const addTicketRow = () => setTickets((prev) => [...prev, { key: "", url: null }]);
+  const removeTicketRow = (index: number) =>
+    setTickets((prev) => prev.filter((_, i) => i !== index));
+
+  const handleTicketKeyChange = (index: number, value: string) =>
+    setTickets((prev) =>
+      prev.map((t, i) => {
+        if (i !== index) return t;
+        const url = t.url?.trim() ? t.url : value.trim() ? jiraUrlFor(value.trim()) : null;
+        return { key: value, url };
+      }),
+    );
+
+  const handleTicketUrlChange = (index: number, value: string) =>
+    setTickets((prev) =>
+      prev.map((t, i) => {
+        if (i !== index) return t;
+        const key = t.key.trim() ? t.key : (extractJiraKey(value) ?? t.key);
+        return { key, url: value };
+      }),
+    );
+
+  /** Cola vários links/chaves Jira de uma vez (um por linha, espaço ou vírgula) e expande em linhas. */
+  const handleTicketPaste = (index: number, e: React.ClipboardEvent<HTMLInputElement>) => {
+    const tokens = e.clipboardData
+      .getData("text")
+      .split(/[\s,]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (tokens.length <= 1) return;
+    e.preventDefault();
+    const parsed = parseTicketTokens(tokens.join("\n"));
+    setTickets((prev) => {
+      const next = [...prev];
+      next.splice(index, 1, ...parsed);
+      return next;
+    });
+  };
 
   const save = useMutation({
     mutationFn: async () => {
@@ -77,8 +115,9 @@ export function AllocationDialog({
         sprint_id: draft.sprint_id,
         dev_id: draft.dev_id,
         title: title.trim(),
-        ticket_key: ticketKey.trim() || null,
-        ticket_url: ticketUrl.trim() || null,
+        tickets: tickets
+          .filter((t) => t.key.trim() || t.url?.trim())
+          .map((t) => ({ key: t.key.trim(), url: t.url?.trim() || null })),
         status,
         tipo,
         notes: notes.trim() || null,
@@ -166,24 +205,38 @@ export function AllocationDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="tk">Ticket</Label>
-              <Input
-                id="tk"
-                value={ticketKey}
-                onChange={(e) => setTicketKey(e.target.value)}
-                placeholder="PIM-7862"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="tu">Link</Label>
-              <Input
-                id="tu"
-                value={ticketUrl}
-                onChange={(e) => setTicketUrl(e.target.value)}
-                placeholder="https://..."
-              />
+          <div className="space-y-1.5">
+            <Label>Tickets</Label>
+            <div className="space-y-2">
+              {tickets.map((t, i) => (
+                <div key={i} className="flex gap-2">
+                  <div className="grid flex-1 grid-cols-2 gap-2">
+                    <Input
+                      value={t.key}
+                      onChange={(e) => handleTicketKeyChange(i, e.target.value)}
+                      onPaste={(e) => handleTicketPaste(i, e)}
+                      placeholder="PIM-7862"
+                    />
+                    <Input
+                      value={t.url ?? ""}
+                      onChange={(e) => handleTicketUrlChange(i, e.target.value)}
+                      onPaste={(e) => handleTicketPaste(i, e)}
+                      placeholder="https://..."
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => removeTicketRow(i)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={addTicketRow}>
+                <Plus className="size-3.5" /> Ticket
+              </Button>
             </div>
           </div>
 
@@ -231,8 +284,7 @@ export function toDraft(a: Allocation): AllocationDraft {
     sprint_id: a.sprint_id,
     dev_id: a.dev_id,
     title: a.title,
-    ticket_key: a.ticket_key,
-    ticket_url: a.ticket_url,
+    tickets: a.tickets,
     status: a.status,
     tipo: a.tipo,
     notes: a.notes,

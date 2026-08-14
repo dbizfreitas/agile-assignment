@@ -37,13 +37,17 @@ export type Sprint = {
   jira_project: JiraProjectKey;
 };
 
+export type AllocationTicket = {
+  key: string;
+  url: string | null;
+};
+
 export type Allocation = {
   id: string;
   sprint_id: string;
   dev_id: string;
   title: string;
-  ticket_key: string | null;
-  ticket_url: string | null;
+  tickets: AllocationTicket[];
   status: AllocationStatus;
   tipo: AllocationTipo;
   notes: string | null;
