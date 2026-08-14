@@ -9,6 +9,7 @@ import {
   accentClassFor,
   chipClassFor,
   formatRange,
+  sanitizeTickets,
   statusInfo,
   tipoInfo,
   washClassFor,
@@ -116,9 +117,13 @@ export function BoardGrid({
         .eq("jira_project", project)
         .order("position");
       if (error) throw error;
-      // `tickets` é jsonb (tipado como `Json` pelo codegen do Supabase) — o
-      // cast direto não tem overlap suficiente com `AllocationTicket[]`.
-      return data as unknown as Allocation[];
+      // `tickets` é jsonb (tipado como `Json` pelo codegen do Supabase) — cada
+      // linha passa por `sanitizeTickets` para nunca expor `key: null` (dado
+      // legado do backfill) ao resto da UI.
+      return (data ?? []).map((a) => ({
+        ...a,
+        tickets: sanitizeTickets(a.tickets),
+      })) as unknown as Allocation[];
     },
   });
 

@@ -73,11 +73,18 @@ export function AllocationDialog({
   const removeTicketRow = (index: number) =>
     setTickets((prev) => prev.filter((_, i) => i !== index));
 
+  // Um campo só é auto-derivado do outro enquanto o valor atual "bater" com o
+  // que a derivação produziria a partir do valor anterior — assim que o
+  // usuário sobrescreve manualmente um dos dois com algo que não casa, a
+  // derivação automática para de mexer naquele campo (evita sobrescrever
+  // edição manual, mas continua recalculando enquanto for só o auto-preenchido
+  // de antes — corrige o link "congelar" na 1ª tecla digitada na chave).
   const handleTicketKeyChange = (index: number, value: string) =>
     setTickets((prev) =>
       prev.map((t, i) => {
         if (i !== index) return t;
-        const url = t.url?.trim() ? t.url : value.trim() ? jiraUrlFor(value.trim().toUpperCase()) : null;
+        const wasAutoDerived = !t.url || t.url === jiraUrlFor(t.key.trim().toUpperCase());
+        const url = wasAutoDerived && value.trim() ? jiraUrlFor(value.trim().toUpperCase()) : t.url;
         return { key: value, url };
       }),
     );
@@ -86,21 +93,31 @@ export function AllocationDialog({
     setTickets((prev) =>
       prev.map((t, i) => {
         if (i !== index) return t;
-        const key = t.key.trim() ? t.key : (extractJiraKey(value) ?? t.key);
+        const oldDerivedKey = t.url ? extractJiraKey(t.url) : null;
+        const wasAutoDerived = !t.key.trim() || t.key === oldDerivedKey;
+        const key = wasAutoDerived ? (extractJiraKey(value) ?? t.key) : t.key;
         return { key, url: value };
       }),
     );
 
   /** Cola vários links/chaves Jira de uma vez (um por linha, espaço ou vírgula) e expande em linhas. */
   const handleTicketPaste = (index: number, e: React.ClipboardEvent<HTMLInputElement>) => {
-    const tokens = e.clipboardData
-      .getData("text")
-      .split(/[\s,]+/)
-      .map((t) => t.trim())
-      .filter(Boolean);
-    if (tokens.length <= 1) return;
+    const text = e.clipboardData.getData("text");
+    const parsed = parseTicketTokens(text);
+    if (parsed.length <= 1) {
+      const [token] = parsed;
+      if (token && !token.key && token.url) {
+        toast.warning("Link colado não tem uma chave Jira reconhecida — preencha a chave manualmente.");
+      }
+      return;
+    }
     e.preventDefault();
-    const parsed = parseTicketTokens(tokens.join("\n"));
+    const missingKeys = parsed.filter((t) => !t.key).length;
+    if (missingKeys > 0) {
+      toast.warning(
+        `${missingKeys} link(s) colado(s) sem chave Jira reconhecida — preencha manualmente.`,
+      );
+    }
     setTickets((prev) => {
       const next = [...prev];
       next.splice(index, 1, ...parsed);
@@ -216,12 +233,14 @@ export function AllocationDialog({
                       onChange={(e) => handleTicketKeyChange(i, e.target.value)}
                       onPaste={(e) => handleTicketPaste(i, e)}
                       placeholder="PIM-7862"
+                      aria-label="Chave do ticket"
                     />
                     <Input
                       value={t.url ?? ""}
                       onChange={(e) => handleTicketUrlChange(i, e.target.value)}
                       onPaste={(e) => handleTicketPaste(i, e)}
                       placeholder="https://..."
+                      aria-label="Link do ticket"
                     />
                   </div>
                   <Button

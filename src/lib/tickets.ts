@@ -1,10 +1,5 @@
 import type { AllocationTicket } from "@/lib/board";
-
-// Duplicado deliberadamente do `JIRA_BASE` de integrations/jira/config.server.ts:
-// aquele módulo é `.server.ts` (fica de fora do bundle do cliente), e este
-// arquivo precisa rodar no browser, dentro do AllocationDialog. Mesma
-// duplicação já existe em components/compromisso/StatsCards.tsx.
-const JIRA_BASE = "https://way2agile.atlassian.net";
+import { JIRA_BASE } from "@/lib/jira-base";
 
 const JIRA_KEY_RE = /\b([A-Z][A-Z0-9]+-\d+)\b/;
 

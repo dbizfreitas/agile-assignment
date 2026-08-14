@@ -55,6 +55,20 @@ export type Allocation = {
   jira_project: JiraProjectKey;
 };
 
+/**
+ * `tickets` chega do banco como `Json` não tipado — linhas legadas migradas
+ * de `ticket_key`/`ticket_url` podem ter `key: null` (o par antigo era
+ * independentemente anulável). Normaliza para o contrato `key: string` antes
+ * de qualquer código de UI confiar nele (ex.: `.toLowerCase()` na busca).
+ */
+export function sanitizeTickets(raw: unknown): AllocationTicket[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((t) => ({
+    key: typeof t?.key === "string" ? t.key : "",
+    url: typeof t?.url === "string" ? t.url : null,
+  }));
+}
+
 export const STATUS_LIST: {
   value: AllocationStatus;
   label: string;
