@@ -24,8 +24,7 @@ export type Database = {
           position: number
           sprint_id: string
           status: Database["public"]["Enums"]["allocation_status"]
-          ticket_key: string | null
-          ticket_url: string | null
+          tickets: Json
           tipo: Database["public"]["Enums"]["allocation_tipo"]
           title: string
           updated_at: string
@@ -39,8 +38,7 @@ export type Database = {
           position?: number
           sprint_id: string
           status?: Database["public"]["Enums"]["allocation_status"]
-          ticket_key?: string | null
-          ticket_url?: string | null
+          tickets?: Json
           tipo?: Database["public"]["Enums"]["allocation_tipo"]
           title: string
           updated_at?: string
@@ -54,8 +52,7 @@ export type Database = {
           position?: number
           sprint_id?: string
           status?: Database["public"]["Enums"]["allocation_status"]
-          ticket_key?: string | null
-          ticket_url?: string | null
+          tickets?: Json
           tipo?: Database["public"]["Enums"]["allocation_tipo"]
           title?: string
           updated_at?: string

@@ -9,6 +9,7 @@ import {
   accentClassFor,
   chipClassFor,
   formatRange,
+  sanitizeTickets,
   statusInfo,
   tipoInfo,
   washClassFor,
@@ -116,7 +117,13 @@ export function BoardGrid({
         .eq("jira_project", project)
         .order("position");
       if (error) throw error;
-      return data as Allocation[];
+      // `tickets` é jsonb (tipado como `Json` pelo codegen do Supabase) — cada
+      // linha passa por `sanitizeTickets` para nunca expor `key: null` (dado
+      // legado do backfill) ao resto da UI.
+      return (data ?? []).map((a) => ({
+        ...a,
+        tickets: sanitizeTickets(a.tickets),
+      })) as unknown as Allocation[];
     },
   });
 
@@ -158,7 +165,7 @@ export function BoardGrid({
     const okTerm =
       !term ||
       a.title.toLowerCase().includes(term) ||
-      (a.ticket_key ?? "").toLowerCase().includes(term);
+      a.tickets.some((t) => t.key.toLowerCase().includes(term));
     return okStatus && okTipo && okTerm;
   };
 
@@ -512,23 +519,28 @@ function AllocationChip({
           >
             {allocation.title}
           </p>
-          {allowWrap && (allocation.ticket_key || allocation.notes) ? (
+          {allowWrap && (allocation.tickets.length > 0 || allocation.notes) ? (
             <div className="mt-1 flex items-center gap-1.5 text-[10px] opacity-80">
-              {allocation.ticket_key ? (
-                allocation.ticket_url ? (
-                  <a
-                    href={allocation.ticket_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-0.5 font-mono underline underline-offset-2"
-                  >
-                    {allocation.ticket_key}
-                    <ExternalLink className="size-2.5" />
-                  </a>
-                ) : (
-                  <span className="font-mono">{allocation.ticket_key}</span>
-                )
+              {allocation.tickets.length > 0 ? (
+                <span className="inline-flex items-center gap-0.5">
+                  {allocation.tickets[0]!.url ? (
+                    <a
+                      href={allocation.tickets[0]!.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-0.5 font-mono underline underline-offset-2"
+                    >
+                      {allocation.tickets[0]!.key}
+                      <ExternalLink className="size-2.5" />
+                    </a>
+                  ) : (
+                    <span className="font-mono">{allocation.tickets[0]!.key}</span>
+                  )}
+                  {allocation.tickets.length > 1 ? (
+                    <span className="font-mono">+{allocation.tickets.length - 1}</span>
+                  ) : null}
+                </span>
               ) : null}
               {allocation.notes ? <span className="truncate">{allocation.notes}</span> : null}
             </div>
@@ -545,22 +557,29 @@ function AllocationChip({
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${chipClass}`}>
             {tipoInfo(allocation.tipo).label}
           </span>
-          {allocation.ticket_key ? (
-            allocation.ticket_url ? (
-              <a
-                href={allocation.ticket_url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-0.5 font-mono text-xs underline underline-offset-2"
-              >
-                {allocation.ticket_key}
-                <ExternalLink className="size-2.5" />
-              </a>
-            ) : (
-              <span className="font-mono text-xs">{allocation.ticket_key}</span>
-            )
-          ) : null}
         </div>
+        {allocation.tickets.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {allocation.tickets.map((t, i) =>
+              t.url ? (
+                <a
+                  key={i}
+                  href={t.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-0.5 font-mono text-xs underline underline-offset-2"
+                >
+                  {t.key}
+                  <ExternalLink className="size-2.5" />
+                </a>
+              ) : (
+                <span key={i} className="font-mono text-xs">
+                  {t.key}
+                </span>
+              ),
+            )}
+          </div>
+        ) : null}
         <p className="text-sm font-medium leading-snug">{allocation.title}</p>
         {allocation.notes ? (
           <p className="text-xs text-muted-foreground">{allocation.notes}</p>

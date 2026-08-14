@@ -37,19 +37,37 @@ export type Sprint = {
   jira_project: JiraProjectKey;
 };
 
+export type AllocationTicket = {
+  key: string;
+  url: string | null;
+};
+
 export type Allocation = {
   id: string;
   sprint_id: string;
   dev_id: string;
   title: string;
-  ticket_key: string | null;
-  ticket_url: string | null;
+  tickets: AllocationTicket[];
   status: AllocationStatus;
   tipo: AllocationTipo;
   notes: string | null;
   position: number;
   jira_project: JiraProjectKey;
 };
+
+/**
+ * `tickets` chega do banco como `Json` não tipado — linhas legadas migradas
+ * de `ticket_key`/`ticket_url` podem ter `key: null` (o par antigo era
+ * independentemente anulável). Normaliza para o contrato `key: string` antes
+ * de qualquer código de UI confiar nele (ex.: `.toLowerCase()` na busca).
+ */
+export function sanitizeTickets(raw: unknown): AllocationTicket[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((t) => ({
+    key: typeof t?.key === "string" ? t.key : "",
+    url: typeof t?.url === "string" ? t.url : null,
+  }));
+}
 
 export const STATUS_LIST: {
   value: AllocationStatus;
