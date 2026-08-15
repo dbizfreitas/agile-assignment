@@ -24,6 +24,13 @@ export type Dev = {
   position: number;
   active: boolean;
   jira_project: JiraProjectKey;
+  /**
+   * Janela de disponibilidade (issue #2). `null` desliga o lado
+   * correspondente da regra — pessoa sem janela aparece habilitada em todas
+   * as sprints, que é o comportamento de antes destas colunas existirem.
+   */
+  available_from: string | null;
+  available_to: string | null;
 };
 
 export type Sprint = {
@@ -129,12 +136,51 @@ export function accentClassFor(a: Pick<Allocation, "tipo" | "status">) {
     : "border-st-nao-especificada-fg";
 }
 
+/**
+ * `2026-08-15` → `15/08/26`. Fatia a string em vez de construir um `Date`:
+ * `new Date("2026-08-15")` é meia-noite UTC e vira 14/08 em `UTC-3`.
+ */
+export function formatDate(iso: string) {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y?.slice(2)}`;
+}
+
 export function formatRange(start: string, end: string) {
-  const f = (iso: string) => {
-    const [y, m, d] = iso.split("-");
-    return `${d}/${m}/${y?.slice(2)}`;
-  };
-  return `${f(start)} – ${f(end)}`;
+  return `${formatDate(start)} – ${formatDate(end)}`;
+}
+
+/**
+ * Uma sprint só é oferecida a uma pessoa quando cabe INTEIRA na janela de
+ * disponibilidade dela — quem entra no meio de uma sprint aparece a partir da
+ * seguinte. É contenção total, não sobreposição: quem tem meia sprint não
+ * deveria receber demanda de sprint cheia. A escolha diverge do texto literal
+ * da issue #2 e está justificada na spec.
+ *
+ * Compara strings `YYYY-MM-DD` diretamente, sem `Date`: nesse formato a ordem
+ * lexicográfica É a cronológica, e não passar por `Date` evita o erro de fuso
+ * descrito em `formatDate`.
+ *
+ * Recebe `Pick<…>` e não as entidades inteiras porque depende só das quatro
+ * datas — a assinatura estreita diz isso, e mantém a função utilizável pelo
+ * novo layout da grade quando a issue #12 reescrever o `BoardGrid`.
+ */
+export function isDevAvailableInSprint(
+  dev: Pick<Dev, "available_from" | "available_to">,
+  sprint: Pick<Sprint, "start_date" | "end_date">,
+) {
+  if (dev.available_from && sprint.start_date < dev.available_from) return false;
+  if (dev.available_to && sprint.end_date > dev.available_to) return false;
+  return true;
+}
+
+/** Período para o tooltip do cabeçalho da coluna; `null` quando não há janela. */
+export function formatAvailability(dev: Pick<Dev, "available_from" | "available_to">) {
+  if (dev.available_from && dev.available_to) {
+    return `Disponível de ${formatDate(dev.available_from)} a ${formatDate(dev.available_to)}`;
+  }
+  if (dev.available_from) return `Disponível a partir de ${formatDate(dev.available_from)}`;
+  if (dev.available_to) return `Disponível até ${formatDate(dev.available_to)}`;
+  return null;
 }
 
 export function initialsFrom(name: string) {
