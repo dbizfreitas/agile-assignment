@@ -22,6 +22,16 @@
 -- Com o trigger, encurtar a janela de alguém travaria o UPDATE de todo
 -- cartão preexistente fora dela — inclusive o arrastar-para-fora, que é
 -- justamente a correção. O banco impediria a única ação que resolve.
+--
+-- NOTA de ordem de deploy: esta migration precisa ser aplicada no SQL Editor
+-- do Supabase ANTES que o bundle do DevDialog que grava available_from/
+-- available_to chegue aos usuários. O payload de salvar pessoa manda essas
+-- duas colunas incondicionalmente; se o bundle novo rodar contra um banco
+-- que ainda não tem as colunas, todo salvamento de pessoa falha — não só o
+-- que mexe em disponibilidade — com "column does not exist" virando o toast
+-- genérico "Não foi possível salvar a alteração", até a migration ser
+-- aplicada. Leituras não quebram: `select("*")` sem as colunas simplesmente
+-- não as traz.
 ALTER TABLE public.devs
   ADD COLUMN available_from date,
   ADD COLUMN available_to   date;
