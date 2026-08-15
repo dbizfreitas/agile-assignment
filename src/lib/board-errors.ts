@@ -33,6 +33,12 @@ export function boardErrorMessage(error: unknown): string {
     if (hit) return hit.message;
   }
 
+  // O diálogo já barra janela invertida no `canSave`; isto cobre o caminho de
+  // um cliente desatualizado, para o usuário não ver o texto cru do Postgres.
+  if (code === "23514" && haystack.includes("devs_availability_order")) {
+    return "A data de fim da disponibilidade não pode ser anterior à de início.";
+  }
+
   if (code === "23514" && haystack.includes("_jira_project_format")) {
     return "Chave de projeto inválida.";
   }
