@@ -44,6 +44,10 @@ export function DevDialog({
   const [teamId, setTeamId] = useState<string>(NEW_TEAM);
   const [newTeamName, setNewTeamName] = useState("");
   const [newTeamColor, setNewTeamColor] = useState(TEAM_COLORS[0]!);
+  // Strings vazias, não `null`: `<Input type="date">` é controlado e `null`
+  // faria o React alternar entre controlado e não-controlado.
+  const [availableFrom, setAvailableFrom] = useState("");
+  const [availableTo, setAvailableTo] = useState("");
 
   // MESMA queryKey do BoardGrid, de propósito: chaves diferentes fariam os dois
   // componentes brigarem pela mesma entrada de cache e o diálogo listaria times
@@ -70,6 +74,8 @@ export function DevDialog({
     setTeamId(dev?.team_id ?? (teams.length > 0 ? teams[0]!.id : NEW_TEAM));
     setNewTeamName("");
     setNewTeamColor(TEAM_COLORS[teams.length % TEAM_COLORS.length]!);
+    setAvailableFrom(dev?.available_from ?? "");
+    setAvailableTo(dev?.available_to ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, dev]);
 
@@ -100,6 +106,12 @@ export function DevDialog({
         initials: initialsFrom(name),
         team_id: finalTeamId,
         position: dev?.position ?? count,
+        // `|| null` e não a string vazia: `""` em coluna `date` é erro de
+        // sintaxe no Postgres, e `null` é o valor que significa "sem
+        // restrição" — o mesmo estado de toda pessoa cadastrada antes da
+        // migration.
+        available_from: availableFrom || null,
+        available_to: availableTo || null,
       };
       const res = dev
         ? await supabase.from("devs").update(payload).eq("id", dev.id)
@@ -117,7 +129,13 @@ export function DevDialog({
     onError: (e: Error) => toast.error(boardErrorMessage(e)),
   });
 
-  const canSave = name.trim().length > 0 && (teamId !== NEW_TEAM || newTeamName.trim().length > 0);
+  // Comparação de strings `YYYY-MM-DD`, mesma técnica de `isDevAvailableInSprint`.
+  const windowInverted = Boolean(availableFrom && availableTo && availableTo < availableFrom);
+
+  const canSave =
+    name.trim().length > 0 &&
+    (teamId !== NEW_TEAM || newTeamName.trim().length > 0) &&
+    !windowInverted;
 
   const remove = useMutation({
     mutationFn: async () => {
@@ -204,6 +222,44 @@ export function DevDialog({
               </div>
             </div>
           ) : null}
+
+          <div className="space-y-1.5">
+            <Label>Disponibilidade</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="dfrom" className="text-xs font-normal text-muted-foreground">
+                  A partir de
+                </Label>
+                <Input
+                  id="dfrom"
+                  type="date"
+                  value={availableFrom}
+                  onChange={(e) => setAvailableFrom(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="dto" className="text-xs font-normal text-muted-foreground">
+                  Até (opcional)
+                </Label>
+                <Input
+                  id="dto"
+                  type="date"
+                  value={availableTo}
+                  onChange={(e) => setAvailableTo(e.target.value)}
+                />
+              </div>
+            </div>
+            {windowInverted ? (
+              <p className="text-xs text-destructive">
+                A data de fim não pode ser anterior à de início.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Em branco, a pessoa fica disponível em todas as sprints. A sprint precisa caber
+                inteira na janela para ficar habilitada.
+              </p>
+            )}
+          </div>
         </div>
 
         <DialogFooter className="sm:justify-between">
