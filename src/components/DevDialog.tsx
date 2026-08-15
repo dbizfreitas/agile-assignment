@@ -228,7 +228,7 @@ export function DevDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="dfrom" className="text-xs font-normal text-muted-foreground">
-                  A partir de
+                  A partir de (opcional)
                 </Label>
                 <Input
                   id="dfrom"
