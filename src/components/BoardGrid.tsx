@@ -8,7 +8,9 @@ import { CalendarPlus, ExternalLink, Pencil, Plus, Search, UserPlus } from "luci
 import {
   accentClassFor,
   chipClassFor,
+  formatAvailability,
   formatRange,
+  isDevAvailableInSprint,
   sanitizeTickets,
   statusInfo,
   tipoInfo,
@@ -302,6 +304,7 @@ export function BoardGrid({
                 </div>
                 {devs.map((d) => {
                   const team = teamById.get(d.team_id);
+                  const availability = formatAvailability(d);
                   return (
                     <Tooltip key={d.id}>
                       <TooltipTrigger asChild>
@@ -330,7 +333,12 @@ export function BoardGrid({
                           <Pencil className="ml-auto size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60" />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent>{d.name}</TooltipContent>
+                      <TooltipContent>
+                        {d.name}
+                        {availability ? (
+                          <span className="block text-muted-foreground">{availability}</span>
+                        ) : null}
+                      </TooltipContent>
                     </Tooltip>
                   );
                 })}
@@ -443,10 +451,18 @@ function SprintRow({
       {devs.map((d) => {
         const key = `${sprint.id}:${d.id}`;
         const items = byCell.get(key) ?? [];
+        // A célula fora da janela não some nem esvazia: ela só deixa de
+        // aceitar entrada. Cartões que já estavam ali continuam renderizando,
+        // abrem no diálogo e podem ser arrastados PARA FORA — que é a ação
+        // que corrige a inconsistência.
+        const available = isDevAvailableInSprint(d, sprint);
         return (
           <div
             key={key}
             onDragOver={(e) => {
+              // Sem `preventDefault()` o navegador não marca a célula como
+              // alvo válido — é assim que o cursor de "proibido" aparece.
+              if (!available) return;
               e.preventDefault();
               setDragOver(key);
             }}
@@ -454,12 +470,13 @@ function SprintRow({
             onDrop={(e) => {
               e.preventDefault();
               setDragOver(null);
+              if (!available) return;
               const id = e.dataTransfer.getData("text/allocation");
               if (id) onDrop(id, d.id);
             }}
             className={`group/cell relative flex flex-col gap-1 border-b border-r border-grid-line p-1.5 last:border-r-0 ${
-              dragOver === key ? "bg-primary/10 ring-1 ring-inset ring-primary" : ""
-            }`}
+              available ? "" : "cursor-not-allowed bg-muted/40"
+            } ${dragOver === key ? "bg-primary/10 ring-1 ring-inset ring-primary" : ""}`}
           >
             <div className="flex min-h-full w-full flex-col gap-1">
               {items.map((a) => (
@@ -473,7 +490,7 @@ function SprintRow({
                 />
               ))}
             </div>
-            {canEdit ? (
+            {canEdit && available ? (
               <button
                 onClick={() => onAdd(d.id)}
                 className="pointer-events-none absolute inset-x-1.5 top-full z-10 mt-0 flex items-center justify-center gap-1 rounded-md border border-dashed border-grid-line bg-surface/90 py-1 text-[11px] text-muted-foreground opacity-0 shadow-card backdrop-blur-sm transition-opacity hover:border-primary hover:text-primary group-hover/cell:pointer-events-auto group-hover/cell:opacity-100"
