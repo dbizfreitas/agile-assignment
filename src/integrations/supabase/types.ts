@@ -91,6 +91,8 @@ export type Database = {
       devs: {
         Row: {
           active: boolean
+          available_from: string | null
+          available_to: string | null
           created_at: string
           id: string
           initials: string
@@ -101,6 +103,8 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          available_from?: string | null
+          available_to?: string | null
           created_at?: string
           id?: string
           initials?: string
@@ -111,6 +115,8 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          available_from?: string | null
+          available_to?: string | null
           created_at?: string
           id?: string
           initials?: string
