@@ -475,7 +475,7 @@ function SprintRow({
               if (id) onDrop(id, d.id);
             }}
             className={`group/cell relative flex flex-col gap-1 border-b border-r border-grid-line p-1.5 last:border-r-0 ${
-              available ? "" : "cursor-not-allowed bg-muted/40"
+              available ? "" : "cursor-not-allowed bg-muted-foreground/15"
             } ${dragOver === key ? "bg-primary/10 ring-1 ring-inset ring-primary" : ""}`}
           >
             <div className="flex min-h-full w-full flex-col gap-1">
