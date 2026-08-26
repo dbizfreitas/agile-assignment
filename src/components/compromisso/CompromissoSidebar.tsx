@@ -59,8 +59,17 @@ export function CompromissoSidebar({
           disabled={sprintsLoading || sprints.length === 0}
         >
           <SelectTrigger>
+            {/* Três estados, não dois: "sem nenhuma sprint" era mostrado com o
+                mesmo "Selecione uma sprint…" de quando há o que selecionar —
+                e o combo desabilitado ficava sem explicação nenhuma. */}
             <SelectValue
-              placeholder={sprintsLoading ? "Carregando sprints…" : "Selecione uma sprint…"}
+              placeholder={
+                sprintsLoading
+                  ? "Carregando sprints…"
+                  : sprints.length === 0
+                    ? "Nenhuma sprint encontrada"
+                    : "Selecione uma sprint…"
+              }
             />
           </SelectTrigger>
           <SelectContent>
