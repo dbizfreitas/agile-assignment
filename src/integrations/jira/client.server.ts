@@ -4,7 +4,17 @@
 import { JIRA_BASE } from "./config.server";
 
 function genericMessageFor(status: number): string {
-  if (status === 401 || status === 403) return "Sem permissão para acessar esse recurso no Jira.";
+  // 401 e 403 apontam para causas OPOSTAS e a frase única mandava quem fosse
+  // arrumar procurar no lugar errado. 401: o Jira nem reconheceu a conta —
+  // token inválido/expirado, e-mail que não corresponde ao token, ou
+  // JIRA_BASE_URL apontando para outro site (todos verificados contra a API,
+  // todos devolvem 401). 403: a conta é válida, mas não alcança o recurso —
+  // tipicamente token com escopos insuficientes para a API Agile (boards e
+  // sprints), ou sem acesso ao projeto.
+  if (status === 401)
+    return "O Jira recusou as credenciais do servidor (token inválido ou expirado, e-mail que não corresponde ao token, ou site do Jira errado).";
+  if (status === 403)
+    return "A conta do Jira está autenticada, mas sem permissão para esse recurso — verifique os escopos do token e o acesso ao projeto.";
   if (status === 404) return "Recurso não encontrado no Jira.";
   if (status === 429) return "O Jira recebeu requisições demais. Tente novamente em instantes.";
   if (status >= 500) return "O Jira está indisponível no momento. Tente novamente em instantes.";
