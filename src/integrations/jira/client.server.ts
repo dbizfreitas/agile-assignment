@@ -36,8 +36,10 @@ export class JiraError extends Error {
 }
 
 function buildAuthHeader(): string {
-  const email = process.env["JIRA_EMAIL"];
-  const token = process.env["JIRA_API_TOKEN"];
+  // `.trim()`: um espaço/newline acidental colado no segredo faz o Jira
+  // devolver 401 sem qualquer pista — o valor "parece" certo em toda inspeção.
+  const email = process.env["JIRA_EMAIL"]?.trim();
+  const token = process.env["JIRA_API_TOKEN"]?.trim();
   if (!email || !token) {
     throw new JiraError(
       503,
