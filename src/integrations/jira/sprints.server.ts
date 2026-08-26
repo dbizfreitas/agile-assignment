@@ -43,6 +43,13 @@ async function fetchBoards(project: string): Promise<Array<{ id: number }>> {
         type: "scrum",
       });
     } catch (err) {
+      // A PRIMEIRA página é o que responde se dá pra falar com o Jira:
+      // credencial ausente, token expirado, 403, Jira fora do ar. Engolir esse
+      // erro devolvia `[]` como se o projeto simplesmente não tivesse board —
+      // e a tela mostrava o seletor de sprint cinza, vazio e sem dizer por quê.
+      // Da segunda página em diante o erro continua tolerado: uma lista parcial
+      // de boards ainda rende sprints, e é melhor que a tela inteira cair.
+      if (pageNum === 0) throw err;
       console.warn(
         `[jira/sprints] Falha ao buscar boards para projeto "${project}" (startAt=${start}):`,
         err,
@@ -61,7 +68,15 @@ async function fetchBoards(project: string): Promise<Array<{ id: number }>> {
   return boards;
 }
 
-async function fetchSprintsForBoard(boardId: number): Promise<JiraSprintRaw[]> {
+/**
+ * Devolve o erro em vez de o esconder. Um board sozinho pode falhar de forma
+ * legítima (403 num board restrito) sem que o projeto inteiro esteja quebrado
+ * — quem decide se aquilo é "resultado parcial" ou "falha" é
+ * `fetchSprintsForProject`, que enxerga todos os boards de uma vez.
+ */
+async function fetchSprintsForBoard(
+  boardId: number,
+): Promise<{ sprints: JiraSprintRaw[]; error: unknown }> {
   const sprints: JiraSprintRaw[] = [];
   let start = 0;
   for (let pageNum = 0; pageNum < MAX_PAGES; pageNum++) {
@@ -77,7 +92,7 @@ async function fetchSprintsForBoard(boardId: number): Promise<JiraSprintRaw[]> {
         `[jira/sprints] Falha ao buscar sprints do board ${boardId} (startAt=${start}):`,
         err,
       );
-      break;
+      return { sprints, error: err };
     }
     sprints.push(...page.values);
     if (page.isLast || page.maxResults <= 0) break;
@@ -88,7 +103,7 @@ async function fetchSprintsForBoard(boardId: number): Promise<JiraSprintRaw[]> {
       );
     }
   }
-  return sprints;
+  return { sprints, error: null };
 }
 
 // Projeto (via board de origem) da sprint — usado só pra validar que
@@ -128,11 +143,17 @@ export async function fetchSprintsForProject(project: string): Promise<SprintRes
   }
 
   const boards = await fetchBoards(project);
-  const sprintArrays = await Promise.all(boards.map((b) => fetchSprintsForBoard(b.id)));
+  const results = await Promise.all(boards.map((b) => fetchSprintsForBoard(b.id)));
+
+  // Um board falhar sozinho é resultado parcial; TODOS falharem não é
+  // resultado nenhum — é a falha que precisa chegar à tela, em vez de virar
+  // uma lista vazia indistinguível de "esse projeto não tem sprint".
+  const failed = results.filter((r) => r.error !== null);
+  if (results.length > 0 && failed.length === results.length) throw failed[0]!.error;
 
   const seen = new Map<number, JiraSprintRaw>();
-  for (const arr of sprintArrays) {
-    for (const s of arr) seen.set(s.id, s);
+  for (const r of results) {
+    for (const s of r.sprints) seen.set(s.id, s);
   }
 
   const all = Array.from(seen.values());

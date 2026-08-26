@@ -9,13 +9,33 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { IssueResponse, JiraProject, SprintResponse } from "@/lib/compromisso/types";
 import type { CycleTimeMode, CycleTimeResponse } from "@/lib/cycle-time/types";
 
+/**
+ * Erro que cruza a fronteira do RPC é serializado por `message` — sem este
+ * mapeamento a UI mostraria o corpo cru da resposta do Jira (ou, pior, um
+ * "Erro ao carregar dados do Jira" genérico) em vez de dizer que a credencial
+ * não está configurada, que o token expirou ou que o Jira está fora do ar. O
+ * detalhe técnico fica só no log do servidor.
+ */
+async function mapJiraError<T>(scope: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    const { JiraError } = await import("./client.server");
+    if (err instanceof JiraError) {
+      console.error(`[jira/${scope}]`, err.status, err.message);
+      throw new Error(err.clientMessage);
+    }
+    throw err;
+  }
+}
+
 export const getJiraProjects = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<JiraProject[]> => {
     const { assertCanViewBoard } = await import("./access.server");
     await assertCanViewBoard(context.supabase, context.userId);
     const { fetchAllowedProjects } = await import("./projects.server");
-    return fetchAllowedProjects();
+    return mapJiraError("projects", () => fetchAllowedProjects());
   });
 
 export const getJiraSprints = createServerFn({ method: "GET" })
@@ -25,7 +45,7 @@ export const getJiraSprints = createServerFn({ method: "GET" })
     const { assertCanViewBoard } = await import("./access.server");
     await assertCanViewBoard(context.supabase, context.userId);
     const { fetchSprintsForProject } = await import("./sprints.server");
-    return fetchSprintsForProject(data.project);
+    return mapJiraError("sprints", () => fetchSprintsForProject(data.project));
   });
 
 export const getJiraSprint = createServerFn({ method: "GET" })
@@ -35,7 +55,7 @@ export const getJiraSprint = createServerFn({ method: "GET" })
     const { assertCanViewBoard } = await import("./access.server");
     await assertCanViewBoard(context.supabase, context.userId);
     const { fetchSprintById } = await import("./sprints.server");
-    return fetchSprintById(data.id);
+    return mapJiraError("sprint", () => fetchSprintById(data.id));
   });
 
 export const getJiraIssues = createServerFn({ method: "GET" })
@@ -45,7 +65,7 @@ export const getJiraIssues = createServerFn({ method: "GET" })
     const { assertCanViewBoard } = await import("./access.server");
     await assertCanViewBoard(context.supabase, context.userId);
     const { fetchIssuesForSprint } = await import("./issues.server");
-    return fetchIssuesForSprint(data.sprintId);
+    return mapJiraError("issues", () => fetchIssuesForSprint(data.sprintId));
   });
 
 export const getJiraCycleTime = createServerFn({ method: "GET" })
@@ -55,19 +75,7 @@ export const getJiraCycleTime = createServerFn({ method: "GET" })
     const { assertCanViewBoard } = await import("./access.server");
     await assertCanViewBoard(context.supabase, context.userId);
     const { fetchCycleTime } = await import("./cycle-time.server");
-    try {
-      return await fetchCycleTime(data.project, data.mode, data.force ?? false);
-    } catch (err) {
-      // Erro que cruza a fronteira do RPC é serializado por `message`. Sem
-      // este mapeamento a UI mostraria o corpo cru da resposta do Jira; com
-      // ele, mostra a tradução pt-BR de JiraError e o detalhe técnico fica só
-      // no log do servidor. As quatro server functions acima têm o mesmo
-      // defeito e NÃO são alteradas nesta demanda — fica registrado.
-      const { JiraError } = await import("./client.server");
-      if (err instanceof JiraError) {
-        console.error("[jira/cycle-time]", err.status, err.message);
-        throw new Error(err.clientMessage);
-      }
-      throw err;
-    }
+    return mapJiraError("cycle-time", () =>
+      fetchCycleTime(data.project, data.mode, data.force ?? false),
+    );
   });
