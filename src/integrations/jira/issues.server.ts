@@ -2,7 +2,14 @@
 import { jiraGet } from "./client.server";
 import { getCache, setCache } from "./cache.server";
 import { withConcurrencyGate } from "./concurrency-gate.server";
-import { ISSUE_FIELDS, SPRINT_FLD, SP_FIELD, REVIEWER_FIELD, JIRA_BASE } from "./config.server";
+import {
+  ISSUE_FIELDS,
+  SPRINT_FLD,
+  SP_FIELD,
+  REVIEWER_FIELD,
+  CHAMADOS_FIELD,
+  JIRA_BASE,
+} from "./config.server";
 import type { IssueResponse } from "@/lib/compromisso/types";
 
 export interface JiraIssueRaw {
@@ -267,6 +274,7 @@ export async function fetchIssuesForSprint(sprintId: number): Promise<IssueRespo
         statusCategory: f.status.statusCategory.key,
         assignee: f.assignee?.displayName ?? "—",
         categories: f.labels ?? [],
+        chamados: ((f[CHAMADOS_FIELD] as string[] | null) ?? []).filter(Boolean),
         parent: f.parent?.key,
         parentType: f.parent?.fields?.issuetype?.name,
         parentSummary: f.parent?.fields?.summary,

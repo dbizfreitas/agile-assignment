@@ -9,6 +9,7 @@ export const JIRA_BASE = (
 export const SP_FIELD = process.env["JIRA_SP_FIELD"] ?? "customfield_10005";
 export const SPRINT_FLD = process.env["JIRA_SPRINT_FIELD"] ?? "customfield_10007";
 export const REVIEWER_FIELD = process.env["JIRA_REVIEWER_FIELD"] ?? "customfield_10200";
+export const CHAMADOS_FIELD = process.env["JIRA_CHAMADOS_FIELD"] ?? "customfield_12449";
 // Deriva da lista única do cliente (src/lib/projects.ts) em vez de repetir as
 // quatro chaves: um projeto novo entra em um lugar só. `Set<string>` explícito
 // porque os chamadores testam `.has(key.toUpperCase())`, cujo argumento é
@@ -26,4 +27,5 @@ export const ISSUE_FIELDS = [
   SP_FIELD,
   SPRINT_FLD,
   REVIEWER_FIELD,
+  CHAMADOS_FIELD,
 ];

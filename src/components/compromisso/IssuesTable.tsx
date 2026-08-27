@@ -62,6 +62,34 @@ function TypeBadge({ type }: { type: string }) {
   );
 }
 
+const CHAMADOS_MAX_VISIBLE = 3;
+
+function ChamadosCell({ values }: { values: string[] }) {
+  if (!values.length) return <span className="text-muted-foreground">—</span>;
+  const visible = values.slice(0, CHAMADOS_MAX_VISIBLE);
+  const extra = values.length - visible.length;
+  return (
+    <span className="inline-flex flex-wrap gap-1">
+      {visible.map((c) => (
+        <span
+          key={c}
+          className="inline-flex rounded-md border bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
+        >
+          {c}
+        </span>
+      ))}
+      {extra > 0 ? (
+        <span
+          className="inline-flex rounded-md border bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
+          title={values.join(", ")}
+        >
+          +{extra}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function StatusPill({ status, category }: { status: string; category: string }) {
   return (
     <span
@@ -132,7 +160,7 @@ export function IssuesTable({
     [vis, all, singleStatus, sort, isHeader, parentsWithSubs],
   );
 
-  const colCount = 7 + (showReviewer ? 1 : 0);
+  const colCount = 8 + (showReviewer ? 1 : 0);
 
   return (
     <Card>
@@ -154,6 +182,7 @@ export function IssuesTable({
                 sort={sort}
                 onSort={toggleSort}
               />
+              <TableHead>Chamados</TableHead>
               <SortableHead
                 col="type"
                 label="Tipo"
@@ -233,6 +262,9 @@ export function IssuesTable({
                         {row.item.key}
                         <ExternalLink className="size-2.5 opacity-50" />
                       </a>
+                    </TableCell>
+                    <TableCell>
+                      <ChamadosCell values={row.item.chamados} />
                     </TableCell>
                     <TableCell>
                       <TypeBadge type={row.item.type} />
