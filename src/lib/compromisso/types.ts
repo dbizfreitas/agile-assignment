@@ -30,6 +30,8 @@ export interface IssueResponse {
   assignee: string;
   /** Campo "Categorias" do Jira (labels); usado p/ identificar itens de compromisso da sprint */
   categories: string[];
+  /** Campo "Chamados" do Jira (customfield_12449); tickets de incidente vinculados */
+  chamados: string[];
   parent?: string | undefined;
   parentType?: string | undefined;
   parentSummary?: string | undefined;
