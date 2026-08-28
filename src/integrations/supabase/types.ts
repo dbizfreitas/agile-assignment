@@ -145,6 +145,7 @@ export type Database = {
           id: string;
           invited_by: string;
           role: Database["public"]["Enums"]["app_role"];
+          routes: Database["public"]["Enums"]["app_route"][];
         };
         Insert: {
           consumed_at?: string | null;
@@ -154,6 +155,7 @@ export type Database = {
           id?: string;
           invited_by: string;
           role: Database["public"]["Enums"]["app_role"];
+          routes?: Database["public"]["Enums"]["app_route"][];
         };
         Update: {
           consumed_at?: string | null;
@@ -163,6 +165,7 @@ export type Database = {
           id?: string;
           invited_by?: string;
           role?: Database["public"]["Enums"]["app_role"];
+          routes?: Database["public"]["Enums"]["app_route"][];
         };
         Relationships: [];
       };
@@ -317,7 +320,11 @@ export type Database = {
     Functions: {
       cancel_invitation: { Args: { _email: string }; Returns: undefined };
       create_invitation: {
-        Args: { _email: string; _role: Database["public"]["Enums"]["app_role"] };
+        Args: {
+          _email: string;
+          _role: Database["public"]["Enums"]["app_role"];
+          _routes?: Database["public"]["Enums"]["app_route"][];
+        };
         Returns: string;
       };
       set_user_role: {
