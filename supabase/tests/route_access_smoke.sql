@@ -97,4 +97,66 @@ BEGIN
   RAISE NOTICE 'Seção 1 OK';
 END $$;
 
+-- ============================================================
+-- Seção 2 — RLS de Alocações ciente de rota (Task 2)
+-- ============================================================
+DO $$
+DECLARE
+  v_editor_sem_rota uuid := 'a4444444-4444-4444-4444-444444444444';
+  v_editor_com_rota uuid := 'a5555555-5555-5555-5555-555555555555';
+  v_team_id uuid;
+  v_count int;
+BEGIN
+  SELECT id INTO v_team_id FROM public.teams LIMIT 1;
+
+  INSERT INTO auth.users
+    (instance_id, id, aud, role, email, encrypted_password,
+     created_at, updated_at, raw_app_meta_data, raw_user_meta_data, is_super_admin)
+  VALUES
+    ('00000000-0000-0000-0000-000000000000', v_editor_sem_rota, 'authenticated', 'authenticated',
+     'route-smoke-editor-semrota@test.local', '', now(), now(), '{}'::jsonb, '{}'::jsonb, false),
+    ('00000000-0000-0000-0000-000000000000', v_editor_com_rota, 'authenticated', 'authenticated',
+     'route-smoke-editor-comrota@test.local', '', now(), now(), '{}'::jsonb, '{}'::jsonb, false);
+
+  INSERT INTO public.user_roles (user_id, role) VALUES
+    (v_editor_sem_rota, 'editor'), (v_editor_com_rota, 'editor');
+  -- v_editor_sem_rota tem papel editor mas NENHUMA rota (não passou pelo backfill
+  -- porque foi criado depois; é exatamente o cenário que a policy nova precisa barrar).
+  INSERT INTO public.user_route_access (user_id, route) VALUES (v_editor_com_rota, 'alocacoes');
+
+  -- 2.1 — leitura: editor sem rota alocacoes não lê devs sob RLS real
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_editor_sem_rota, 'role', 'authenticated')::text, true);
+  SELECT count(*) INTO v_count FROM public.devs;
+  RESET ROLE;
+  IF v_count <> 0 THEN
+    RAISE EXCEPTION 'FALHA 2.1: editor sem rota leu % linha(s) de devs', v_count;
+  END IF;
+
+  -- 2.2 — escrita: editor sem rota alocacoes não insere em devs (papel sozinho não basta)
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_editor_sem_rota, 'role', 'authenticated')::text, true);
+  BEGIN
+    INSERT INTO public.devs (name, team_id) VALUES ('Smoke Sem Rota', v_team_id);
+    RESET ROLE;
+    RAISE EXCEPTION 'FALHA 2.2: editor sem rota conseguiu inserir em devs';
+  EXCEPTION WHEN insufficient_privilege THEN
+    RESET ROLE;
+  END;
+
+  -- 2.3 — escrita: editor COM rota alocacoes insere normalmente
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_editor_com_rota, 'role', 'authenticated')::text, true);
+  INSERT INTO public.devs (name, team_id) VALUES ('Smoke Com Rota', v_team_id);
+  RESET ROLE;
+  IF NOT EXISTS (SELECT 1 FROM public.devs WHERE name = 'Smoke Com Rota') THEN
+    RAISE EXCEPTION 'FALHA 2.3: editor com rota não conseguiu inserir em devs';
+  END IF;
+
+  RAISE NOTICE 'Seção 2 OK';
+END $$;
+
 ROLLBACK;
