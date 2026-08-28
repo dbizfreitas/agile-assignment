@@ -31,8 +31,8 @@ export function BurndownCard({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center gap-2 pb-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
+      <CardHeader className="flex flex-row items-start gap-2 pb-2">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           <CardTitle className="shrink-0 whitespace-nowrap text-sm font-semibold">
             Burndown do Compromisso
           </CardTitle>
