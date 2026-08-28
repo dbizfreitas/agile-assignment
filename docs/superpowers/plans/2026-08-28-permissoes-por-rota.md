@@ -19,7 +19,7 @@
 - **Fora de escopo (decidido na spec, não implementar aqui):** proteção real do dado de Retrospectivas (rastreado em [#24](https://github.com/dbizfreitas/agile-assignment/issues/24)); provisionamento automático via SSO sem convite prévio (rastreado em [#3](https://github.com/dbizfreitas/agile-assignment/issues/3)); nível de acesso por rota (ex.: "editor só de Alocações"); `/admin` como rota da grade — continua derivada de `role = 'admin'`.
 - **`src/routes/_shell/index.tsx` não muda.** Continua redirecionando para `/alocacoes`; se o usuário não tiver essa rota, o guard central de `_shell.tsx` cobre o caso (ver Task 7). Calcular "primeira rota acessível" não foi pedido pelos critérios de aceite.
 - **Sem test runner.** `package.json` só tem `dev`, `build`, `build:dev`, `preview`, `lint`, `format` — esta demanda não introduz um. Verificação: smoke SQL (roda em `BEGIN...ROLLBACK`, sem resíduo) para o banco; `tsc`/`eslint` para o TypeScript; roteiro manual para UI e para os 5 endpoints Jira (não há como testar RLS de server function sem sessão real).
-- **Migrations são aplicadas via a ferramenta MCP `mcp__8c553376-f5bb-472e-9b9c-3910d695c68f__query_database`** (não há Supabase CLI nem `psql` neste ambiente). Carregar a ferramenta com `ToolSearch({query: "select:mcp__8c553376-f5bb-472e-9b9c-3910d695c68f__query_database"})` antes do primeiro uso. `project_id` do Lovable é `ec89b9ca-8900-4590-a9be-687542db3778` — **não confundir** com o `project_id` do `supabase/config.toml` (`nuvrdppxecbowxopbqcr`), que é o projeto Supabase, não o do Lovable. Cada migration é aplicada com uma chamada de `query_database` passando o conteúdo integral do `.sql` no parâmetro `sql`; decisão registrada com o usuário: essa ferramenta não consome créditos Lovable, mas roda DDL/RLS direto em produção sem revisão humana prévia do arquivo — por isso o report do implementador cita o resultado exato retornado pela ferramenta para cada migration aplicada (sucesso ou erro), não apenas "apliquei a migration".
+- **Migrations são aplicadas MANUALMENTE pelo usuário, no SQL Editor do projeto Supabase `nuvrdppxecbowxopbqcr`** (`https://supabase.com/dashboard/project/nuvrdppxecbowxopbqcr/sql/new`) — esse é o projeto real, o mesmo do `.env`/`supabase/config.toml` deste repositório. **A ferramenta MCP `query_database` do Lovable (`project_id ec89b9ca-8900-4590-a9be-687542db3778`) NÃO deve ser usada para aplicar ou verificar estas migrations** — ela aponta para um banco Postgres diferente (provisionado separadamente pelo Lovable), confirmado na prática: uma migration aplicada por ela não apareceu no banco real (`user_route_access` ausente via `GET .../rest/v1/user_route_access` → `PGRST205`, enquanto `user_roles`, que existe de verdade, respondeu normalmente). O subagente cria o arquivo `.sql` e o `.md` do report pedindo para o usuário colar o conteúdo no SQL Editor, aguarda a confirmação do usuário ("apliquei, deu sucesso" ou a mensagem de erro) antes de seguir para os próximos steps que dependem do schema (ex.: o smoke test).
 - **`src/integrations/supabase/types.ts` é editado à mão** — mesma convenção já usada para `invitations`, `role_audit_log`, `allocations.tickets`.
 - **`set_user_routes` substitui a lista inteira, não faz delta.** O cliente sempre manda o array completo de rotas que o usuário deve ter ao final — mesmo padrão de `ToggleGroup` controlado (o componente já entrega o array final em `onValueChange`).
 - **Não fazer `git push`.** O repositório sincroniza com o Lovable; o push é decisão do usuário ao final.
@@ -171,7 +171,7 @@ GRANT EXECUTE ON FUNCTION public.set_user_routes(uuid, public.app_route[]) TO au
 
 - [ ] **Step 2: Aplicar a migration**
 
-Chamar `mcp__8c553376-f5bb-472e-9b9c-3910d695c68f__query_database` com `project_id: "ec89b9ca-8900-4590-a9be-687542db3778"` e `sql` igual ao conteúdo integral do arquivo. Confirmar que a chamada não retornou erro antes de seguir.
+Pedir ao usuário para colar o conteúdo integral do arquivo no SQL Editor do projeto Supabase `nuvrdppxecbowxopbqcr` e executar. Aguardar a confirmação do usuário (sucesso ou a mensagem de erro) antes de seguir para o Step 3.
 
 - [ ] **Step 3: Escrever o smoke test (Seção 1)**
 
@@ -282,7 +282,7 @@ ROLLBACK;
 
 - [ ] **Step 4: Rodar o smoke test**
 
-Chamar `query_database` com o mesmo `project_id` e `sql` igual ao conteúdo integral de `route_access_smoke.sql`. `RAISE NOTICE` não aparece no retorno de `query_database` (que devolve linhas, não o log do servidor) — o sinal de sucesso aqui é a chamada retornar sem erro (a suíte só levanta exceção em falha; sucesso é ausência de erro após o `ROLLBACK`).
+Pedir ao usuário para colar o conteúdo de `route_access_smoke.sql` no mesmo SQL Editor e executar. Esperado: `NOTICE: Seção 1 OK`, sem `ERROR`. Aguardar a confirmação do usuário antes de seguir.
 
 - [ ] **Step 5: Editar `src/integrations/supabase/types.ts` — tabela nova**
 
@@ -510,7 +510,7 @@ CREATE POLICY allocations_delete_editors ON public.allocations
 
 - [ ] **Step 2: Aplicar a migration**
 
-Chamar `query_database` (`project_id: "ec89b9ca-8900-4590-a9be-687542db3778"`) com o conteúdo integral do arquivo. Confirmar ausência de erro.
+Pedir ao usuário para colar o conteúdo integral do arquivo no SQL Editor do projeto Supabase `nuvrdppxecbowxopbqcr` e executar. Aguardar confirmação antes de seguir.
 
 - [ ] **Step 3: Acrescentar a Seção 2 ao smoke test**
 
@@ -582,7 +582,7 @@ END $$;
 
 - [ ] **Step 4: Rodar o smoke test completo**
 
-Chamar `query_database` com o conteúdo integral de `route_access_smoke.sql` (Seções 1 e 2). Esperado: chamada sem erro.
+Pedir ao usuário para colar o arquivo inteiro (Seções 1 e 2) no SQL Editor e executar. Esperado: `Seção 1 OK`, `Seção 2 OK`, sem `ERROR`.
 
 - [ ] **Step 5: Commit**
 
@@ -617,7 +617,7 @@ ALTER TYPE public.role_audit_action ADD VALUE 'route_grant';
 ALTER TYPE public.role_audit_action ADD VALUE 'route_revoke';
 ```
 
-Chamar `query_database` (`project_id: "ec89b9ca-8900-4590-a9be-687542db3778"`) com o conteúdo integral do arquivo. Confirmar ausência de erro **antes** de seguir para o Step 2 — os dois `ALTER TYPE ADD VALUE` precisam commitar em chamadas/transações separadas do que os usa.
+Pedir ao usuário para colar o conteúdo integral do arquivo no SQL Editor do projeto Supabase `nuvrdppxecbowxopbqcr` e executar. Aguardar confirmação **antes** de seguir para o Step 2 — os dois `ALTER TYPE ADD VALUE` precisam commitar em transações separadas do que os usa.
 
 - [ ] **Step 2: Escrever e aplicar a migration da coluna e do trigger**
 
@@ -670,7 +670,7 @@ AFTER INSERT OR DELETE ON public.user_route_access
 FOR EACH ROW EXECUTE FUNCTION private.audit_user_route_access();
 ```
 
-Chamar `query_database` com o conteúdo integral deste segundo arquivo. Confirmar ausência de erro.
+Pedir ao usuário para colar o conteúdo integral deste segundo arquivo no SQL Editor e executar. Aguardar confirmação.
 
 - [ ] **Step 3: Acrescentar a Seção 3 ao smoke test**
 
@@ -721,7 +721,7 @@ END $$;
 
 - [ ] **Step 4: Rodar o smoke test completo**
 
-Chamar `query_database` com o conteúdo integral de `route_access_smoke.sql` (Seções 1-3). Esperado: chamada sem erro.
+Pedir ao usuário para colar o conteúdo integral de `route_access_smoke.sql` (Seções 1-3) no SQL Editor e executar. Esperado: `Seção 1 OK`, `Seção 2 OK`, `Seção 3 OK`, sem `ERROR`.
 
 - [ ] **Step 5: Editar `types.ts` — enum `role_audit_action` e coluna `route`**
 
@@ -906,7 +906,7 @@ END $$;
 
 - [ ] **Step 2: Aplicar a migration**
 
-Chamar `query_database` (`project_id: "ec89b9ca-8900-4590-a9be-687542db3778"`) com o conteúdo integral do arquivo. Confirmar ausência de erro.
+Pedir ao usuário para colar o conteúdo integral do arquivo no SQL Editor do projeto Supabase `nuvrdppxecbowxopbqcr` e executar. Aguardar confirmação.
 
 - [ ] **Step 3: Acrescentar a Seção 4 ao smoke test**
 
@@ -973,7 +973,7 @@ ROLLBACK;
 
 - [ ] **Step 4: Rodar o smoke test completo**
 
-Chamar `query_database` com o conteúdo integral de `route_access_smoke.sql` (Seções 1-4). Esperado: chamada sem erro.
+Pedir ao usuário para colar o conteúdo integral de `route_access_smoke.sql` (Seções 1-4) no SQL Editor e executar. Esperado: `Seção 1 OK` a `Seção 4 OK`, sem `ERROR`.
 
 - [ ] **Step 5: Editar `types.ts` — `invitations.routes` e `create_invitation`**
 
@@ -2403,7 +2403,7 @@ Trocar o papel de um usuário (Select existente) e confirmar que continua funcio
 
 - [ ] **Step 8: Rodar a suíte de smoke SQL uma última vez, do zero**
 
-Chamar `query_database` (`project_id: "ec89b9ca-8900-4590-a9be-687542db3778"`) com o conteúdo integral de `supabase/tests/route_access_smoke.sql`. Esperado: chamada sem erro, confirmando que nada das Tasks 5-11 exigiu mudança no banco que o smoke test não cubra.
+Colar `supabase/tests/route_access_smoke.sql` inteiro no SQL Editor do projeto Supabase `nuvrdppxecbowxopbqcr` e executar. Esperado: `Seção 1 OK` a `Seção 4 OK`, sem `ERROR`, confirmando que nada das Tasks 5-11 exigiu mudança no banco que o smoke test não cubra.
 
 ---
 
