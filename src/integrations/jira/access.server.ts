@@ -1,9 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
-
-// Provisório: promovido para src/components/shell/tabs.ts na Task 6 desta
-// mesma frente (permissões por rota), que é a fonte única dos 4 ids de guia.
-type AppRoute = Database["public"]["Enums"]["app_route"];
+import type { AppRoute } from "@/components/shell/tabs";
 
 // Mesmo padrão de src/integrations/supabase/admin.server.ts::assertAdmin —
 // usa o client do PRÓPRIO usuário (sob RLS), nunca a service_role — mas
