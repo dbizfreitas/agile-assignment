@@ -182,7 +182,6 @@ export function IssuesTable({
                 sort={sort}
                 onSort={toggleSort}
               />
-              <TableHead>Chamados</TableHead>
               <SortableHead
                 col="type"
                 label="Tipo"
@@ -214,6 +213,7 @@ export function IssuesTable({
                   onSort={toggleSort}
                 />
               ) : null}
+              <TableHead>Chamados</TableHead>
               <SortableHead
                 col="days_in_status"
                 label="Dias no status"
@@ -264,9 +264,6 @@ export function IssuesTable({
                       </a>
                     </TableCell>
                     <TableCell>
-                      <ChamadosCell values={row.item.chamados} />
-                    </TableCell>
-                    <TableCell>
                       <TypeBadge type={row.item.type} />
                     </TableCell>
                     <TableCell>
@@ -277,6 +274,9 @@ export function IssuesTable({
                     </TableCell>
                     <TableCell>{row.item.assignee}</TableCell>
                     {showReviewer ? <TableCell>{row.item.reviewer ?? "—"}</TableCell> : null}
+                    <TableCell>
+                      <ChamadosCell values={row.item.chamados} />
+                    </TableCell>
                     <TableCell>
                       <DaysInStatus d={row.item.days_in_status} />
                     </TableCell>
