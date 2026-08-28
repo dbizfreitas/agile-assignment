@@ -42,6 +42,14 @@ export function StatsCards({
   const sp = vis.reduce((s, i) => s + countableSP(i), 0);
   const pct = vis.length ? Math.round((done.length / vis.length) * 100) : 0;
 
+  // Na visão "Concluídos", `vis` já É o conjunto de itens atendidos — o corte
+  // entre "do compromisso" e "extra" é só a tag COMPROMISSO em categorias.
+  const isCommitment = makeIsCommitmentIssueForSprint(sprintData);
+  const commitDoneItems = viewMode === "done" ? vis.filter(isCommitment) : [];
+  const extraDoneItems = viewMode === "done" ? vis.filter((i) => !isCommitment(i)) : [];
+  const commitDoneSP = commitDoneItems.reduce((s, i) => s + countableSP(i), 0);
+  const extraDoneSP = extraDoneItems.reduce((s, i) => s + countableSP(i), 0);
+
   // Bug nunca é estimado por convenção do time — SP em bug é a exceção, não a
   // regra; contá-lo aqui como "gap" apontaria um problema que não existe.
   const noSPItems = vis.filter((i) => i.sp == null && !isHeader(i) && i.type !== "Bug");
@@ -68,7 +76,9 @@ export function StatsCards({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div
+      className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${viewMode === "done" ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}
+    >
       <StatCard
         icon={<ListChecks className="size-4 text-blue-500" />}
         label={
@@ -77,12 +87,37 @@ export function StatsCards({
         value={vis.length}
         sub="itens na sprint"
       />
-      <StatCard
-        icon={<Sparkles className="size-4 text-purple-500" />}
-        label={viewMode === "done" ? "SP Total Concluído" : "SP Total"}
-        value={sp}
-        sub={viewMode === "all" ? `${doneSP} SP concluídos` : ""}
-      />
+      {viewMode === "done" ? (
+        <>
+          <StatCard
+            icon={<Sparkles className="size-4 text-purple-500" />}
+            label="SPs Compromisso Atendidos"
+            value={commitDoneSP}
+            sub={`${commitDoneItems.length} item${commitDoneItems.length !== 1 ? "s" : ""}`}
+            onClick={
+              commitDoneItems.length
+                ? () => openJql(commitDoneItems.map((i) => i.key))
+                : undefined
+            }
+          />
+          <StatCard
+            icon={<Sparkles className="size-4 text-purple-500" />}
+            label="Extras"
+            value={extraDoneSP}
+            sub={`${extraDoneItems.length} item${extraDoneItems.length !== 1 ? "s" : ""}`}
+            onClick={
+              extraDoneItems.length ? () => openJql(extraDoneItems.map((i) => i.key)) : undefined
+            }
+          />
+        </>
+      ) : (
+        <StatCard
+          icon={<Sparkles className="size-4 text-purple-500" />}
+          label="SP Total"
+          value={sp}
+          sub={`${doneSP} SP concluídos`}
+        />
+      )}
       <StatCard
         icon={<CheckCircle2 className="size-4 text-green-500" />}
         label={doneLabel}
