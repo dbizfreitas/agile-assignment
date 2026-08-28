@@ -44,7 +44,7 @@ export function BurndownCard({
               key={k.key}
               className={`shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                 k.resolved
-                  ? "border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400"
+                  ? "border-green-500/40 bg-green-500/10 text-green-600 line-through dark:text-green-400"
                   : "border-border bg-muted text-muted-foreground"
               }`}
             >
