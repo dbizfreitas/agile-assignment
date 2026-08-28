@@ -159,4 +159,45 @@ BEGIN
   RAISE NOTICE 'Seção 2 OK';
 END $$;
 
+-- ============================================================
+-- Seção 3 — Auditoria de rota (Task 3)
+-- ============================================================
+DO $$
+DECLARE
+  v_admin uuid := 'a1111111-1111-1111-1111-111111111111';
+  v_target uuid := 'a6666666-6666-6666-6666-666666666666';
+  v_count int;
+BEGIN
+  INSERT INTO auth.users
+    (instance_id, id, aud, role, email, encrypted_password,
+     created_at, updated_at, raw_app_meta_data, raw_user_meta_data, is_super_admin)
+  VALUES
+    ('00000000-0000-0000-0000-000000000000', v_target, 'authenticated', 'authenticated',
+     'route-smoke-audit@test.local', '', now(), now(), '{}'::jsonb, '{}'::jsonb, false);
+  INSERT INTO public.user_roles (user_id, role) VALUES (v_target, 'viewer');
+
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+
+  -- 3.1 — conceder gera route_grant com a rota certa
+  PERFORM public.set_user_routes(v_target, ARRAY['alocacoes']::public.app_route[]);
+  SELECT count(*) INTO v_count FROM public.role_audit_log
+   WHERE target_user_id = v_target AND action = 'route_grant'
+     AND route = 'alocacoes'::public.app_route AND actor_user_id = v_admin;
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'FALHA 3.1: route_grant não registrado (achou %)', v_count;
+  END IF;
+
+  -- 3.2 — revogar gera route_revoke
+  PERFORM public.set_user_routes(v_target, ARRAY[]::public.app_route[]);
+  SELECT count(*) INTO v_count FROM public.role_audit_log
+   WHERE target_user_id = v_target AND action = 'route_revoke'
+     AND route = 'alocacoes'::public.app_route AND actor_user_id = v_admin;
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'FALHA 3.2: route_revoke não registrado (achou %)', v_count;
+  END IF;
+
+  RAISE NOTICE 'Seção 3 OK';
+END $$;
+
 ROLLBACK;

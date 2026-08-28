@@ -175,6 +175,7 @@ export type Database = {
           id: string;
           new_role: Database["public"]["Enums"]["app_role"] | null;
           previous_role: Database["public"]["Enums"]["app_role"] | null;
+          route: Database["public"]["Enums"]["app_route"] | null;
           target_email: string | null;
           target_user_id: string | null;
         };
@@ -186,6 +187,7 @@ export type Database = {
           id?: string;
           new_role?: Database["public"]["Enums"]["app_role"] | null;
           previous_role?: Database["public"]["Enums"]["app_role"] | null;
+          route?: Database["public"]["Enums"]["app_route"] | null;
           target_email?: string | null;
           target_user_id?: string | null;
         };
@@ -197,6 +199,7 @@ export type Database = {
           id?: string;
           new_role?: Database["public"]["Enums"]["app_role"] | null;
           previous_role?: Database["public"]["Enums"]["app_role"] | null;
+          route?: Database["public"]["Enums"]["app_route"] | null;
           target_email?: string | null;
           target_user_id?: string | null;
         };
@@ -337,7 +340,8 @@ export type Database = {
       allocation_tipo: "planejado" | "bug" | "evolutiva" | "ferias";
       app_role: "admin" | "editor" | "viewer";
       app_route: "compromisso" | "cycle-time" | "retrospectivas" | "alocacoes";
-      role_audit_action: "invite" | "grant" | "revoke" | "bootstrap" | "cancel";
+      role_audit_action:
+        "invite" | "grant" | "revoke" | "bootstrap" | "cancel" | "route_grant" | "route_revoke";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -463,7 +467,15 @@ export const Constants = {
       allocation_tipo: ["planejado", "bug", "evolutiva", "ferias"],
       app_role: ["admin", "editor", "viewer"],
       app_route: ["compromisso", "cycle-time", "retrospectivas", "alocacoes"],
-      role_audit_action: ["invite", "grant", "revoke", "bootstrap", "cancel"],
+      role_audit_action: [
+        "invite",
+        "grant",
+        "revoke",
+        "bootstrap",
+        "cancel",
+        "route_grant",
+        "route_revoke",
+      ],
     },
   },
 } as const;
