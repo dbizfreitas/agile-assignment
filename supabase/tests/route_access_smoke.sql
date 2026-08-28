@@ -200,4 +200,57 @@ BEGIN
   RAISE NOTICE 'Seção 3 OK';
 END $$;
 
+-- ============================================================
+-- Seção 4 — Convite com rotas (Task 4)
+-- ============================================================
+DO $$
+DECLARE
+  v_admin uuid := 'a1111111-1111-1111-1111-111111111111';
+  v_invited uuid := 'a7777777-7777-7777-7777-777777777777';
+  v_custom uuid := 'a8888888-8888-8888-8888-888888888888';
+BEGIN
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+
+  -- 4.1 — convite sem _routes usa o default (alocacoes)
+  PERFORM public.create_invitation('route-smoke-invited@test.local', 'viewer'::public.app_role);
+  INSERT INTO auth.users
+    (instance_id, id, aud, role, email, encrypted_password,
+     created_at, updated_at, raw_app_meta_data, raw_user_meta_data, is_super_admin)
+  VALUES
+    ('00000000-0000-0000-0000-000000000000', v_invited, 'authenticated', 'authenticated',
+     'route-smoke-invited@test.local', '', now(), now(), '{}'::jsonb, '{}'::jsonb, false);
+
+  IF NOT private.has_route(v_invited, 'alocacoes'::public.app_route) THEN
+    RAISE EXCEPTION 'FALHA 4.1: usuário novo sem _routes explícito não recebeu alocacoes';
+  END IF;
+  IF private.has_route(v_invited, 'compromisso'::public.app_route) THEN
+    RAISE EXCEPTION 'FALHA 4.2: usuário novo recebeu rota além do default';
+  END IF;
+
+  -- 4.3 — convite com _routes customizado propaga na criação do usuário
+  PERFORM public.create_invitation(
+    'route-smoke-custom@test.local', 'editor'::public.app_role,
+    ARRAY['compromisso', 'cycle-time']::public.app_route[]
+  );
+  INSERT INTO auth.users
+    (instance_id, id, aud, role, email, encrypted_password,
+     created_at, updated_at, raw_app_meta_data, raw_user_meta_data, is_super_admin)
+  VALUES
+    ('00000000-0000-0000-0000-000000000000', v_custom, 'authenticated', 'authenticated',
+     'route-smoke-custom@test.local', '', now(), now(), '{}'::jsonb, '{}'::jsonb, false);
+
+  IF private.has_route(v_custom, 'alocacoes'::public.app_route) THEN
+    RAISE EXCEPTION 'FALHA 4.3: usuário com _routes customizado recebeu alocacoes indevidamente';
+  END IF;
+  IF NOT private.has_route(v_custom, 'compromisso'::public.app_route) THEN
+    RAISE EXCEPTION 'FALHA 4.4: usuário com _routes customizado não recebeu compromisso';
+  END IF;
+  IF NOT private.has_route(v_custom, 'cycle-time'::public.app_route) THEN
+    RAISE EXCEPTION 'FALHA 4.5: usuário com _routes customizado não recebeu cycle-time';
+  END IF;
+
+  RAISE NOTICE 'Seção 4 OK';
+END $$;
+
 ROLLBACK;
