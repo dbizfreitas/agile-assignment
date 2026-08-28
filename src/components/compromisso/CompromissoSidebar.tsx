@@ -1,4 +1,5 @@
-import { RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -47,8 +48,36 @@ export function CompromissoSidebar({
   refreshing,
   lastUpdate,
 }: CompromissoSidebarProps) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  if (collapsed) {
+    return (
+      <nav className="flex h-full w-10 shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar p-2 text-sidebar-foreground">
+        <Button
+          size="icon"
+          variant="ghost"
+          className="size-6"
+          onClick={() => setCollapsed(false)}
+          aria-label="Expandir menu da sprint"
+        >
+          <ChevronRight className="size-4" />
+        </Button>
+      </nav>
+    );
+  }
+
   return (
     <nav className="flex h-full w-64 shrink-0 flex-col gap-4 overflow-y-auto border-r border-sidebar-border bg-sidebar p-4 text-sidebar-foreground">
+      <Button
+        size="icon"
+        variant="ghost"
+        className="size-6 self-end"
+        onClick={() => setCollapsed(true)}
+        aria-label="Recolher menu da sprint"
+      >
+        <ChevronLeft className="size-4" />
+      </Button>
+
       <div>
         <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Sprint
