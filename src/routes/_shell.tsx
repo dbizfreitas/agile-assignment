@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useLocation } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthorizedSession } from "@/hooks/use-authorized-session";
 import { AuthCard } from "@/components/AuthCard";
@@ -10,6 +10,7 @@ import { getJiraProjects } from "@/integrations/jira/server-fns";
 import { JIRA_PROJECTS, isJiraProjectKey, type JiraProjectKey } from "@/lib/projects";
 import type { ProjectOption } from "@/components/ProjectSelect";
 import { AppShell } from "@/components/shell/AppShell";
+import { TABS } from "@/components/shell/tabs";
 import { ShellProvider } from "@/components/shell/shell-context";
 
 /**
@@ -69,20 +70,24 @@ export const Route = createFileRoute("/_shell")({
 });
 
 function Shell() {
-  const { session, loading, canEdit, isAdmin, canView } = useAuthorizedSession();
+  const { session, loading, canEdit, isAdmin, canView, routes } = useAuthorizedSession();
   const [project, setProject] = useState<JiraProjectKey | null>(() => resolveProject());
+  const pathname = useLocation({ select: (l) => l.pathname });
+  const activeTab = TABS.find((t) => pathname.startsWith(t.to));
 
   /**
    * As CHAVES vêm de `JIRA_PROJECTS`; só o RÓTULO vem do Jira. Não existe
    * fallback a executar: com token expirado, Atlassian instável ou a query em
-   * voo, o seletor está completo e as Alocações funcionam. `enabled: canView`
-   * porque `getJiraProjects` exige sessão + papel — sem isso a tela de login
-   * dispararia uma server function que só pode falhar.
+   * voo, o seletor está completo e as Alocações funcionam. `getJiraProjects`
+   * exige a rota `compromisso` OU `cycle-time` (via `assertAnyRouteAccess`),
+   * não "algum papel" — um usuário com só a rota `alocacoes` (o default de
+   * todo convite novo) não passa nessa checagem no servidor, então a query
+   * fica desabilitada para ele em vez de disparar e falhar sempre.
    */
   const projectsQ = useQuery({
     queryKey: ["jira", "projects"],
     queryFn: () => getJiraProjects(),
-    enabled: canView,
+    enabled: routes.has("compromisso") || routes.has("cycle-time"),
     // A lista de projetos praticamente não muda, e com guia = rota cada troca
     // de guia remontaria esta query. Ver "Remontagem dos painéis" na spec.
     staleTime: 30 * 60_000,
@@ -142,15 +147,24 @@ function Shell() {
   const email = session.user.email ?? "";
 
   return (
-    <ShellProvider value={{ email, canEdit, isAdmin, project }}>
+    <ShellProvider value={{ email, canEdit, isAdmin, project, routes }}>
       <AppShell
         email={email}
         isAdmin={isAdmin}
         project={project}
         options={options}
+        routes={routes}
         onProjectChange={handleProjectChange}
       >
-        <Outlet />
+        {activeTab && !routes.has(activeTab.id) ? (
+          <div className="flex flex-1 items-center justify-center p-8">
+            <p className="max-w-sm text-center text-sm text-muted-foreground">
+              Você não tem acesso a esta guia. Peça a um administrador para liberar.
+            </p>
+          </div>
+        ) : (
+          <Outlet />
+        )}
       </AppShell>
     </ShellProvider>
   );

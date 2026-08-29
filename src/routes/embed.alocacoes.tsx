@@ -57,7 +57,7 @@ export const Route = createFileRoute("/embed/alocacoes")({
 
 function EmbedAlocacoes() {
   const { project: fromUrl } = Route.useSearch();
-  const { session, loading, canEdit, canView } = useAuthorizedSession();
+  const { session, loading, canEdit, canView, routes } = useAuthorizedSession();
 
   if (loading) {
     return (
@@ -74,6 +74,20 @@ function EmbedAlocacoes() {
       <AccessDenied
         title="Acesso ainda não liberado"
         description="Sua conta existe, mas nenhum papel foi atribuído. Peça acesso a um administrador da plataforma."
+        action={
+          <Button variant="outline" className="w-full" onClick={() => supabase.auth.signOut()}>
+            Sair
+          </Button>
+        }
+      />
+    );
+  }
+
+  if (!routes.has("alocacoes")) {
+    return (
+      <AccessDenied
+        title="Acesso não liberado"
+        description="Você não tem acesso à guia Alocações. Peça a um administrador para liberar."
         action={
           <Button variant="outline" className="w-full" onClick={() => supabase.auth.signOut()}>
             Sair

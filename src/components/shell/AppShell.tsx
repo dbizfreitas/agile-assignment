@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ProjectSelect, type ProjectOption } from "@/components/ProjectSelect";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/integrations/supabase/client";
-import { TABS } from "./tabs";
+import { TABS, type AppRoute } from "./tabs";
 
 const TAB_BASE =
   "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors";
@@ -15,6 +15,7 @@ export function AppShell({
   isAdmin,
   project,
   options,
+  routes,
   onProjectChange,
   children,
 }: {
@@ -23,6 +24,7 @@ export function AppShell({
   /** `string` e não `JiraProjectKey`: é o contrato do ProjectSelect. */
   project: string;
   options: readonly ProjectOption[];
+  routes: Set<AppRoute>;
   onProjectChange: (key: string) => void;
   children: ReactNode;
 }) {
@@ -31,6 +33,7 @@ export function AppShell({
   // respondendo — não um segundo cálculo nosso.
   const pathname = useLocation({ select: (l) => l.pathname });
   const activeTab = TABS.find((t) => pathname.startsWith(t.to));
+  const visibleTabs = TABS.filter((t) => routes.has(t.id));
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
@@ -68,7 +71,7 @@ export function AppShell({
           aria-label="Navegação principal"
           className="flex flex-wrap items-center gap-1 border-t border-border px-4 py-1.5"
         >
-          {TABS.map((tab) => {
+          {visibleTabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <Link

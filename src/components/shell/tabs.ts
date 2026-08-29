@@ -28,3 +28,8 @@ export const TABS = [
   { id: "retrospectivas", to: "/retrospectivas", label: "Retrospectivas", icon: Dices },
   { id: "alocacoes", to: "/alocacoes", label: "Alocações", icon: LayoutGrid },
 ] as const satisfies readonly TabDef[];
+
+// Os 4 ids de TABS, na mesma ordem — é o mesmo conjunto de valores do enum
+// public.app_route (supabase/migrations/20260828130000_route_access_foundation.sql).
+// Derivado em vez de redeclarado: TABS já é a fonte única da lista de guias.
+export type AppRoute = (typeof TABS)[number]["id"];
