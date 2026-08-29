@@ -740,10 +740,12 @@ Em `src/integrations/supabase/admin.server.ts`, no `.map((u) => ({ ... }))` fina
       // outros provedores. Quem entrou por convite por e-mail não tem
       // nenhum dos dois — a UI cai para o e-mail sozinho.
       name:
-        (u.user_metadata?.full_name as string | undefined) ??
-        (u.user_metadata?.name as string | undefined) ??
+        (u.user_metadata?.["full_name"] as string | undefined) ??
+        (u.user_metadata?.["name"] as string | undefined) ??
         null,
 ```
+
+**Acesso por colchete, não por ponto.** `UserMetadata` do supabase-js é uma index signature, e o `tsconfig` do projeto tem `noPropertyAccessFromIndexSignature` — `u.user_metadata?.full_name` reprova com `TS4111`.
 
 - [ ] **Step 5: Verificar**
 
@@ -759,7 +761,7 @@ npx eslint src/lib/admin.ts src/lib/admin-errors.ts src/integrations/supabase/ad
 npx tsc --noEmit
 ```
 
-Esperado: os três sem erro. Se `tsc` reclamar de `user_metadata` possivelmente indefinido, o `?.` já cobre — confirmar que o operador não foi omitido.
+Esperado: os três sem erro. `TS4111` em `full_name`/`name` significa que o acesso ficou por ponto em vez de colchete — ver a nota do Step 4.
 
 - [ ] **Step 6: Commit**
 
