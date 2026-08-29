@@ -2,6 +2,13 @@
 -- Roda inteiramente dentro de uma transação com ROLLBACK: não deixa resíduo.
 -- Colar no SQL Editor do Supabase e executar por completo.
 -- Sucesso = "Success. No rows returned" + um NOTICE 'Seção N OK' por seção.
+--
+-- ORDEM DAS SEÇÕES: a Seção 0 TEM de continuar sendo a primeira. Ela audita
+-- o estado real do banco e só é válida enquanto nenhum fixture existe — as
+-- seções seguintes criam usuários de teste, e a 5.6 fabrica um órfão de
+-- propósito. Mover a Seção 0 para baixo faria ela acusar esses fixtures como
+-- defeito de produção, com uma mensagem de erro que aponta para o lugar
+-- errado. Seções novas entram DEPOIS dela.
 BEGIN;
 
 -- ============================================================
@@ -18,6 +25,13 @@ BEGIN;
 -- a asserção simples e sem manutenção: neste ponto da transação só existem
 -- as linhas reais do banco, então não é preciso excluir uuid de teste algum
 -- (a Seção 5.6, por exemplo, fabrica um órfão de propósito mais adiante).
+--
+-- Nem todo órfão é necessariamente bug: set_user_routes NÃO exige que o
+-- alvo já tenha papel, então um admin chamando a RPC direto pela API (a UI
+-- desabilita o toggle quando role é null — UserTable.tsx) criaria uma linha
+-- órfã legítima. Isso não é fluxo suportado hoje; se esta seção falhar,
+-- confirmar de qual caminho vieram as linhas antes de concluir que a
+-- limpeza de 20260828134000 falhou.
 -- ============================================================
 DO $$
 DECLARE
