@@ -333,4 +333,66 @@ BEGIN
   RAISE NOTICE 'Seção 5 OK';
 END $$;
 
+-- ============================================================
+-- Seção 5.6 — Finding I-1: isola a metade "policy de RLS" do fix da
+-- metade "cascade delete". A 5.1-5.5 acima só passa por set_user_role(NULL),
+-- que APAGA a linha de rota junto — então aquele teste passaria mesmo se a
+-- policy de SELECT tivesse ficado no has_route(...) antigo (sem exigir
+-- papel), porque a rota já não existe mais quando 5.2 roda. Isso nunca
+-- exercita o estado "tem rota, mas não tem papel" — que é exatamente o
+-- estado em que TODO usuário já desativado antes deste fix se encontra
+-- hoje em produção (rota do backfill original, papel já removido por um
+-- set_user_role antigo, sem a correção do item 2 desta migration), e é
+-- exatamente o que a metade "policy" do fix (item 1), e não a metade
+-- "cascade" (item 2), tem que barrar sozinha.
+-- ============================================================
+DO $$
+DECLARE
+  v_admin uuid := 'a1111111-1111-1111-1111-111111111111';
+  v_orphan uuid := 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  v_count int;
+  v_has_route boolean;
+BEGIN
+  INSERT INTO auth.users
+    (instance_id, id, aud, role, email, encrypted_password,
+     created_at, updated_at, raw_app_meta_data, raw_user_meta_data, is_super_admin)
+  VALUES
+    ('00000000-0000-0000-0000-000000000000', v_orphan, 'authenticated', 'authenticated',
+     'route-smoke-orphan-route@test.local', '', now(), now(), '{}'::jsonb, '{}'::jsonb, false);
+
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+
+  -- Setup normal: papel + rota, pelos caminhos oficiais da app.
+  PERFORM public.set_user_role(v_orphan, 'editor'::public.app_role);
+  PERFORM public.set_user_routes(v_orphan, ARRAY['alocacoes']::public.app_route[]);
+
+  -- Bypass deliberado do cascade: DELETE cru em user_roles, NUNCA passando
+  -- por set_user_role. A linha de user_route_access sobrevive, porque só
+  -- set_user_role (item 2 do fix) apaga user_route_access, e ele não foi
+  -- chamado aqui.
+  DELETE FROM public.user_roles WHERE user_id = v_orphan;
+
+  -- 5.6a — a rota sobreviveu ao DELETE cru (prova que não foi um cascade
+  -- automático de FK ou trigger apagando a rota por baixo dos panos).
+  v_has_route := private.has_route(v_orphan, 'alocacoes'::public.app_route);
+  IF NOT v_has_route THEN
+    RAISE EXCEPTION 'FALHA 5.6a: has_route retornou false — a rota não deveria ter sido removida pelo DELETE cru em user_roles (setup do teste está errado)';
+  END IF;
+
+  -- 5.6b — mesmo com has_route = true, a leitura sob RLS real tem que ser
+  -- zero: só a policy (papel E rota), e não a ausência da rota, pode estar
+  -- barreando aqui.
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_orphan, 'role', 'authenticated')::text, true);
+  SELECT count(*) INTO v_count FROM public.devs;
+  RESET ROLE;
+  IF v_count <> 0 THEN
+    RAISE EXCEPTION 'FALHA 5.6b: usuário sem papel mas com rota alocacoes ainda leu % linha(s) de devs — a policy de SELECT não está exigindo can_view_board(...) além de has_route(...)', v_count;
+  END IF;
+
+  RAISE NOTICE 'Seção 5.6 OK';
+END $$;
+
 ROLLBACK;
