@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
 import type { JiraProjectKey } from "@/lib/projects";
+import type { AppRoute } from "./tabs";
 
 /**
  * O que a casca garante aos painéis. `project` é NÃO ANULÁVEL de propósito: a
@@ -18,6 +19,7 @@ export type ShellContextValue = {
   canEdit: boolean;
   isAdmin: boolean;
   project: JiraProjectKey;
+  routes: Set<AppRoute>;
 };
 
 const ShellContext = createContext<ShellContextValue | null>(null);
