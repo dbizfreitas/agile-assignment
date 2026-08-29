@@ -69,6 +69,13 @@ export async function fetchPlatformUsers(): Promise<PlatformUser[]> {
     .map((u) => ({
       id: u.id,
       email: u.email ?? "",
+      // full_name é o que o Azure/Microsoft manda; name é o fallback de
+      // outros provedores. Quem entrou por convite por e-mail não tem
+      // nenhum dos dois — a UI cai para o e-mail sozinho.
+      name:
+        (u.user_metadata?.["full_name"] as string | undefined) ??
+        (u.user_metadata?.["name"] as string | undefined) ??
+        null,
       role: roleByUser.get(u.id) ?? null,
       routes: routesByUser.get(u.id) ?? [],
       createdAt: u.created_at,
