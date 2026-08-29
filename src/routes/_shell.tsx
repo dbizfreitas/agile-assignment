@@ -78,14 +78,16 @@ function Shell() {
   /**
    * As CHAVES vêm de `JIRA_PROJECTS`; só o RÓTULO vem do Jira. Não existe
    * fallback a executar: com token expirado, Atlassian instável ou a query em
-   * voo, o seletor está completo e as Alocações funcionam. `enabled: canView`
-   * porque `getJiraProjects` exige sessão + papel — sem isso a tela de login
-   * dispararia uma server function que só pode falhar.
+   * voo, o seletor está completo e as Alocações funcionam. `getJiraProjects`
+   * exige a rota `compromisso` OU `cycle-time` (via `assertAnyRouteAccess`),
+   * não "algum papel" — um usuário com só a rota `alocacoes` (o default de
+   * todo convite novo) não passa nessa checagem no servidor, então a query
+   * fica desabilitada para ele em vez de disparar e falhar sempre.
    */
   const projectsQ = useQuery({
     queryKey: ["jira", "projects"],
     queryFn: () => getJiraProjects(),
-    enabled: canView,
+    enabled: routes.has("compromisso") || routes.has("cycle-time"),
     // A lista de projetos praticamente não muda, e com guia = rota cada troca
     // de guia remontaria esta query. Ver "Remontagem dos painéis" na spec.
     staleTime: 30 * 60_000,
