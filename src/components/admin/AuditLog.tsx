@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { adminErrorMessage } from "@/lib/admin-errors";
 import { ACTION_LABELS, ROLE_LABELS, type AppRole, type AuditEntry } from "@/lib/admin";
+import { TABS } from "@/components/shell/tabs";
 import {
   Table,
   TableBody,
@@ -15,13 +16,18 @@ function roleLabel(role: AppRole | null): string {
   return role ? ROLE_LABELS[role] : "—";
 }
 
+function routeLabel(entry: AuditEntry): string {
+  if (!entry.route) return "—";
+  return TABS.find((t) => t.id === entry.route)?.label ?? entry.route;
+}
+
 export function AuditLog() {
   const q = useQuery({
     queryKey: ["role-audit"],
     queryFn: async (): Promise<AuditEntry[]> => {
       const { data, error } = await supabase
         .from("role_audit_log")
-        .select("id, action, target_email, actor_email, previous_role, new_role, created_at")
+        .select("id, action, target_email, actor_email, previous_role, new_role, route, created_at")
         .order("created_at", { ascending: false })
         .limit(100);
       if (error) throw error;
@@ -46,7 +52,7 @@ export function AuditLog() {
   if (entries.length === 0) {
     return (
       <p className="py-10 text-center text-sm text-muted-foreground">
-        Nenhuma alteração de papel registrada.
+        Nenhuma alteração registrada.
       </p>
     );
   }
@@ -61,6 +67,7 @@ export function AuditLog() {
             <TableHead>Alvo</TableHead>
             <TableHead>Responsável</TableHead>
             <TableHead className="w-44">Mudança</TableHead>
+            <TableHead className="w-32">Rota</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -77,6 +84,7 @@ export function AuditLog() {
               <TableCell className="text-sm">
                 {roleLabel(e.previous_role)} → {roleLabel(e.new_role)}
               </TableCell>
+              <TableCell className="text-sm">{routeLabel(e)}</TableCell>
             </TableRow>
           ))}
         </TableBody>
