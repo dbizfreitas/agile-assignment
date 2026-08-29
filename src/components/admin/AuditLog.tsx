@@ -21,6 +21,24 @@ function routeLabel(entry: AuditEntry): string {
   return TABS.find((t) => t.id === entry.route)?.label ?? entry.route;
 }
 
+/**
+ * A coluna "Mudança" descreve o eixo de PAPEL. Nem todo evento mexe nele:
+ * `route_grant`/`route_revoke` (eixo de rota) e `cancel` (convite cancelado)
+ * gravam os dois lados nulos, e aí "— → —" é só ruído — o que aconteceu já
+ * está nas colunas "Ação" e "Rota".
+ *
+ * A condição olha para o DADO (nenhum papel dos dois lados), não para o tipo
+ * de ação: assim uma ação futura que também não mexa em papel entra no caso
+ * certo sozinha, sem precisar ser adicionada a uma lista.
+ *
+ * Não confundir com o convite (`invite`), que grava só `new_role` — esse
+ * continua exibindo "— → Leitor", que é informação real.
+ */
+function changeLabel(entry: AuditEntry): string {
+  if (!entry.previous_role && !entry.new_role) return "—";
+  return `${roleLabel(entry.previous_role)} → ${roleLabel(entry.new_role)}`;
+}
+
 export function AuditLog() {
   const q = useQuery({
     queryKey: ["role-audit"],
@@ -81,9 +99,7 @@ export function AuditLog() {
               <TableCell className="text-sm">
                 {e.actor_email ?? <span className="text-muted-foreground">fora da aplicação</span>}
               </TableCell>
-              <TableCell className="text-sm">
-                {roleLabel(e.previous_role)} → {roleLabel(e.new_role)}
-              </TableCell>
+              <TableCell className="text-sm">{changeLabel(e)}</TableCell>
               <TableCell className="text-sm">{routeLabel(e)}</TableCell>
             </TableRow>
           ))}
