@@ -3,6 +3,7 @@ const MESSAGES: Record<string, string> = {
   W2001: "Você não tem permissão para esta ação.",
   W2002: "Você não pode remover seu próprio acesso de administrador.",
   W2003: "É necessário ao menos um administrador na plataforma.",
+  W2005: "Você não pode excluir a própria conta.",
 };
 
 export function adminErrorMessage(error: unknown): string {

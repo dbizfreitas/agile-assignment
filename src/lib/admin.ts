@@ -5,6 +5,10 @@ export type AppRole = "admin" | "editor" | "viewer";
 export type PlatformUser = {
   id: string;
   email: string;
+  // Só existe para quem entrou por um provedor que envia o nome (SSO). Usado
+  // apenas na confirmação de exclusão — a listagem continua identificando
+  // pelo e-mail.
+  name: string | null;
   role: AppRole | null;
   routes: AppRoute[];
   createdAt: string;
@@ -14,7 +18,15 @@ export type PlatformUser = {
 
 export type AuditEntry = {
   id: string;
-  action: "invite" | "grant" | "revoke" | "bootstrap" | "cancel" | "route_grant" | "route_revoke";
+  action:
+    | "invite"
+    | "grant"
+    | "revoke"
+    | "bootstrap"
+    | "cancel"
+    | "route_grant"
+    | "route_revoke"
+    | "delete";
   target_email: string | null;
   actor_email: string | null;
   previous_role: AppRole | null;
@@ -46,4 +58,5 @@ export const ACTION_LABELS: Record<AuditEntry["action"], string> = {
   cancel: "Convite cancelado",
   route_grant: "Rota concedida",
   route_revoke: "Rota revogada",
+  delete: "Exclusão",
 };
