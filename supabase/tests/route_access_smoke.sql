@@ -253,4 +253,84 @@ BEGIN
   RAISE NOTICE 'Seção 4 OK';
 END $$;
 
+-- ============================================================
+-- Seção 5 — Regressão do Finding C1: leitura não pode sobreviver à
+-- revogação do papel (fix em 20260828134000_route_access_fix_read_requires_role.sql)
+-- ============================================================
+DO $$
+DECLARE
+  v_admin uuid := 'a1111111-1111-1111-1111-111111111111';
+  v_revoked uuid := 'a9999999-9999-9999-9999-999999999999';
+  v_count int;
+BEGIN
+  INSERT INTO auth.users
+    (instance_id, id, aud, role, email, encrypted_password,
+     created_at, updated_at, raw_app_meta_data, raw_user_meta_data, is_super_admin)
+  VALUES
+    ('00000000-0000-0000-0000-000000000000', v_revoked, 'authenticated', 'authenticated',
+     'route-smoke-revoked@test.local', '', now(), now(), '{}'::jsonb, '{}'::jsonb, false);
+
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+
+  -- Setup: papel editor + rota alocacoes, via os mesmos caminhos que o
+  -- restante da app usa (set_user_role e set_user_routes).
+  PERFORM public.set_user_role(v_revoked, 'editor'::public.app_role);
+  PERFORM public.set_user_routes(v_revoked, ARRAY['alocacoes']::public.app_route[]);
+
+  -- 5.1 — confirma que, ANTES da revogação, a leitura sob RLS real funciona
+  -- (mesmo idioma da Seção 2: SET LOCAL ROLE + request.jwt.claims).
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_revoked, 'role', 'authenticated')::text, true);
+  SELECT count(*) INTO v_count FROM public.devs;
+  RESET ROLE;
+  IF v_count = 0 THEN
+    RAISE EXCEPTION 'FALHA 5.1: usuário com papel editor + rota alocacoes não leu nenhuma linha de devs (setup da seção está errado)';
+  END IF;
+
+  -- Revoga o papel por completo, como um admin faz em /admin ao definir
+  -- "Sem acesso". Esta é a operação que, antes do fix, deixava
+  -- user_route_access intacto.
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  PERFORM public.set_user_role(v_revoked, NULL);
+
+  -- 5.2 — a regressão em si: leitura sob RLS real agora tem que voltar a
+  -- zero linhas, não mais "acesso negado só na UI".
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_revoked, 'role', 'authenticated')::text, true);
+  SELECT count(*) INTO v_count FROM public.devs;
+  RESET ROLE;
+  IF v_count <> 0 THEN
+    RAISE EXCEPTION 'FALHA 5.2: usuário com papel revogado ainda leu % linha(s) de devs sob RLS real', v_count;
+  END IF;
+
+  -- 5.3 — prova de que o cascade delete realmente rodou (não é a policy
+  -- fechando por outro motivo).
+  IF private.has_route(v_revoked, 'alocacoes'::public.app_route) THEN
+    RAISE EXCEPTION 'FALHA 5.3: has_route ainda retorna true após set_user_role(NULL) — cascade não rodou';
+  END IF;
+
+  -- 5.4 — a revogação de papel foi auditada...
+  SELECT count(*) INTO v_count FROM public.role_audit_log
+   WHERE target_user_id = v_revoked AND action = 'revoke' AND actor_user_id = v_admin;
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'FALHA 5.4: role_revoke (action=revoke) não registrado para o papel (achou %)', v_count;
+  END IF;
+
+  -- 5.5 — ...e o cascade de rota também, atribuído ao mesmo ator (prova que
+  -- app.actor_id ainda estava setado quando o DELETE em user_route_access
+  -- rodou dentro de set_user_role).
+  SELECT count(*) INTO v_count FROM public.role_audit_log
+   WHERE target_user_id = v_revoked AND action = 'route_revoke'
+     AND route = 'alocacoes'::public.app_route AND actor_user_id = v_admin;
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'FALHA 5.5: route_revoke não registrado para o cascade de rota (achou %)', v_count;
+  END IF;
+
+  RAISE NOTICE 'Seção 5 OK';
+END $$;
+
 ROLLBACK;
