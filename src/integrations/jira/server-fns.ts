@@ -32,8 +32,8 @@ async function mapJiraError<T>(scope: string, run: () => Promise<T>): Promise<T>
 export const getJiraProjects = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<JiraProject[]> => {
-    const { assertCanViewBoard } = await import("./access.server");
-    await assertCanViewBoard(context.supabase, context.userId);
+    const { assertAnyRouteAccess } = await import("./access.server");
+    await assertAnyRouteAccess(context.supabase, context.userId, ["compromisso", "cycle-time"]);
     const { fetchAllowedProjects } = await import("./projects.server");
     return mapJiraError("projects", () => fetchAllowedProjects());
   });
@@ -42,8 +42,8 @@ export const getJiraSprints = createServerFn({ method: "GET" })
   .validator((data: { project: string }) => data)
   .middleware([requireSupabaseAuth])
   .handler(async ({ context, data }): Promise<SprintResponse[]> => {
-    const { assertCanViewBoard } = await import("./access.server");
-    await assertCanViewBoard(context.supabase, context.userId);
+    const { assertRouteAccess } = await import("./access.server");
+    await assertRouteAccess(context.supabase, context.userId, "compromisso");
     const { fetchSprintsForProject } = await import("./sprints.server");
     return mapJiraError("sprints", () => fetchSprintsForProject(data.project));
   });
@@ -52,8 +52,8 @@ export const getJiraSprint = createServerFn({ method: "GET" })
   .validator((data: { id: number }) => data)
   .middleware([requireSupabaseAuth])
   .handler(async ({ context, data }): Promise<SprintResponse> => {
-    const { assertCanViewBoard } = await import("./access.server");
-    await assertCanViewBoard(context.supabase, context.userId);
+    const { assertRouteAccess } = await import("./access.server");
+    await assertRouteAccess(context.supabase, context.userId, "compromisso");
     const { fetchSprintById } = await import("./sprints.server");
     return mapJiraError("sprint", () => fetchSprintById(data.id));
   });
@@ -62,8 +62,8 @@ export const getJiraIssues = createServerFn({ method: "GET" })
   .validator((data: { sprintId: number }) => data)
   .middleware([requireSupabaseAuth])
   .handler(async ({ context, data }): Promise<IssueResponse[]> => {
-    const { assertCanViewBoard } = await import("./access.server");
-    await assertCanViewBoard(context.supabase, context.userId);
+    const { assertRouteAccess } = await import("./access.server");
+    await assertRouteAccess(context.supabase, context.userId, "compromisso");
     const { fetchIssuesForSprint } = await import("./issues.server");
     return mapJiraError("issues", () => fetchIssuesForSprint(data.sprintId));
   });
@@ -72,8 +72,8 @@ export const getJiraCycleTime = createServerFn({ method: "GET" })
   .validator((data: { project: string; mode: CycleTimeMode; force?: boolean }) => data)
   .middleware([requireSupabaseAuth])
   .handler(async ({ context, data }): Promise<CycleTimeResponse> => {
-    const { assertCanViewBoard } = await import("./access.server");
-    await assertCanViewBoard(context.supabase, context.userId);
+    const { assertRouteAccess } = await import("./access.server");
+    await assertRouteAccess(context.supabase, context.userId, "cycle-time");
     const { fetchCycleTime } = await import("./cycle-time.server");
     return mapJiraError("cycle-time", () =>
       fetchCycleTime(data.project, data.mode, data.force ?? false),

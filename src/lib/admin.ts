@@ -1,9 +1,12 @@
+import type { AppRoute } from "@/components/shell/tabs";
+
 export type AppRole = "admin" | "editor" | "viewer";
 
 export type PlatformUser = {
   id: string;
   email: string;
   role: AppRole | null;
+  routes: AppRoute[];
   createdAt: string;
   lastSignInAt: string | null;
   pendingInvite: boolean;
@@ -11,11 +14,12 @@ export type PlatformUser = {
 
 export type AuditEntry = {
   id: string;
-  action: "invite" | "grant" | "revoke" | "bootstrap" | "cancel";
+  action: "invite" | "grant" | "revoke" | "bootstrap" | "cancel" | "route_grant" | "route_revoke";
   target_email: string | null;
   actor_email: string | null;
   previous_role: AppRole | null;
   new_role: AppRole | null;
+  route: AppRoute | null;
   created_at: string;
 };
 
@@ -40,4 +44,6 @@ export const ACTION_LABELS: Record<AuditEntry["action"], string> = {
   revoke: "Revogação",
   bootstrap: "Bootstrap",
   cancel: "Convite cancelado",
+  route_grant: "Rota concedida",
+  route_revoke: "Rota revogada",
 };

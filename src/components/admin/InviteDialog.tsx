@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateInviteLink } from "@/integrations/supabase/admin-fns";
 import { adminErrorMessage } from "@/lib/admin-errors";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS, type AppRole } from "@/lib/admin";
+import { TABS, type AppRoute } from "@/components/shell/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,12 +25,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+
+const DEFAULT_ROUTES: AppRoute[] = ["alocacoes"];
 
 export function InviteDialog() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<AppRole>("editor");
+  const [routes, setRoutes] = useState<AppRoute[]>(DEFAULT_ROUTES);
   const [link, setLink] = useState<string | null>(null);
 
   const invite = useMutation({
@@ -38,6 +43,7 @@ export function InviteDialog() {
       const { error } = await supabase.rpc("create_invitation", {
         _email: email,
         _role: role,
+        _routes: routes,
       });
       if (error) throw error;
 
@@ -76,6 +82,7 @@ export function InviteDialog() {
   function reset() {
     setEmail("");
     setRole("editor");
+    setRoutes(DEFAULT_ROUTES);
     setLink(null);
   }
 
@@ -157,6 +164,25 @@ export function InviteDialog() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Rotas liberadas</Label>
+              <ToggleGroup
+                type="multiple"
+                value={routes}
+                onValueChange={(next) => setRoutes(next as AppRoute[])}
+              >
+                {TABS.map((tab) => (
+                  <ToggleGroupItem
+                    key={tab.id}
+                    value={tab.id}
+                    title={tab.label}
+                    aria-label={tab.label}
+                  >
+                    <tab.icon className="size-4" />
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
             </div>
             <Button type="submit" className="w-full" disabled={invite.isPending}>
               {invite.isPending ? "Gerando convite..." : "Gerar link de convite"}

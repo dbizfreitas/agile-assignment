@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { generateInviteLink, listPlatformUsers } from "@/integrations/supabase/admin-fns";
 import { adminErrorMessage } from "@/lib/admin-errors";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS, type AppRole } from "@/lib/admin";
+import { TABS, type AppRoute } from "@/components/shell/tabs";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -13,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Table,
   TableBody,
@@ -60,6 +62,23 @@ export function UserTable({ currentUserId }: { currentUserId: string }) {
     onError: (error) => toast.error(adminErrorMessage(error)),
   });
 
+  const setRoutes = useMutation({
+    mutationFn: async (vars: { userId: string; routes: AppRoute[] }) => {
+      const { error } = await supabase.rpc("set_user_routes", {
+        _target: vars.userId,
+        _routes: vars.routes,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Rotas atualizadas");
+      void qc.invalidateQueries({ queryKey: ["platform-users"] });
+      void qc.invalidateQueries({ queryKey: ["role-audit"] });
+      void qc.invalidateQueries({ queryKey: ["user-routes"] });
+    },
+    onError: (error) => toast.error(adminErrorMessage(error)),
+  });
+
   // O link de convite do Supabase pode expirar antes do convite em si
   // (Email OTP Expiration, padrão 24 h). "magiclink" funciona para um
   // usuário que já existe — "invite" falharia.
@@ -98,6 +117,7 @@ export function UserTable({ currentUserId }: { currentUserId: string }) {
           <TableRow>
             <TableHead>E-mail</TableHead>
             <TableHead className="w-40">Papel</TableHead>
+            <TableHead className="w-44">Rotas</TableHead>
             <TableHead className="w-32">Último acesso</TableHead>
             <TableHead className="w-32">Situação</TableHead>
           </TableRow>
@@ -146,6 +166,28 @@ export function UserTable({ currentUserId }: { currentUserId: string }) {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+              </TableCell>
+              <TableCell>
+                <ToggleGroup
+                  type="multiple"
+                  size="sm"
+                  value={u.routes}
+                  disabled={setRoutes.isPending || u.role === null}
+                  onValueChange={(next) =>
+                    setRoutes.mutate({ userId: u.id, routes: next as AppRoute[] })
+                  }
+                >
+                  {TABS.map((tab) => (
+                    <ToggleGroupItem
+                      key={tab.id}
+                      value={tab.id}
+                      title={tab.label}
+                      aria-label={tab.label}
+                    >
+                      <tab.icon className="size-4" />
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {formatDate(u.lastSignInAt)}
