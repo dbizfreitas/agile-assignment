@@ -7,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "./client.server";
 import type { Database } from "./types";
 import type { AppRole, PlatformUser } from "@/lib/admin";
+import type { AppRoute } from "@/components/shell/tabs";
 
 // Reconfirma o papel usando o client do PRÓPRIO usuário (sob RLS), antes de
 // qualquer uso da service_role. Não é spoofável pelo cliente.
@@ -47,13 +48,29 @@ export async function fetchPlatformUsers(): Promise<PlatformUser[]> {
     throw new Error("Não foi possível carregar os papéis dos usuários");
   }
 
+  const { data: routeRows, error: routesError } = await supabaseAdmin
+    .from("user_route_access")
+    .select("user_id, route");
+  if (routesError) {
+    console.error("[admin] leitura de user_route_access falhou:", routesError);
+    throw new Error("Não foi possível carregar as rotas dos usuários");
+  }
+
   const roleByUser = new Map<string, AppRole>(roles.map((r) => [r.user_id, r.role as AppRole]));
+
+  const routesByUser = new Map<string, AppRoute[]>();
+  for (const r of routeRows) {
+    const list = routesByUser.get(r.user_id) ?? [];
+    list.push(r.route as AppRoute);
+    routesByUser.set(r.user_id, list);
+  }
 
   return data.users
     .map((u) => ({
       id: u.id,
       email: u.email ?? "",
       role: roleByUser.get(u.id) ?? null,
+      routes: routesByUser.get(u.id) ?? [],
       createdAt: u.created_at,
       lastSignInAt: u.last_sign_in_at ?? null,
       // generateLink já cria a linha em auth.users, então "nunca entrou"
