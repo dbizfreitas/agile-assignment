@@ -1,0 +1,31 @@
+-- Achado ao rodar supabase/tests/rbac_smoke.sql (FALHA 2.6) durante a
+-- validação final da issue #23 — sem relação com permissões por rota.
+--
+-- A migration original de RBAC (20260808120000_rbac_foundation.sql) já
+-- revogava INSERT/UPDATE/DELETE de authenticated/service_role em
+-- role_audit_log, para que a auditoria fosse imutável mesmo para quem tem a
+-- service_role key. Um diagnóstico ao vivo mostrou que esse REVOKE não está
+-- em vigor no banco real hoje: authenticated, anon, service_role e postgres
+-- têm INSERT/UPDATE/DELETE/TRUNCATE completos na tabela.
+--
+-- Mesmo padrão já documentado em 20260813120000_restore_rpc_execute_revokes.sql
+-- — REVOKEs anteriores não sobreviveram a algum evento de infraestrutura do
+-- Lovable (provavelmente um "remix" do projeto). Este é o mesmo tipo de
+-- perda, desta vez num GRANT de tabela em vez de EXECUTE de função.
+--
+-- Por que isto não expôs a auditoria na prática: a tabela tem RLS habilitado
+-- e só existe UMA policy, de SELECT para admin — sem nenhuma policy de
+-- INSERT/UPDATE/DELETE, o RLS já bloqueava qualquer escrita por
+-- authenticated/anon independente do grant de tabela estar liberado. O
+-- FALHA 2.6 do smoke test não indica que uma linha real foi apagada — indica
+-- que o DELETE não levantou o erro de privilégio insuficiente que deveria
+-- (ele simplesmente não encontrou linha visível sob RLS para apagar,
+-- retornando sucesso com zero linhas afetadas). Ainda assim, a camada de
+-- grant é defesa em profundidade que vale restaurar — sem ela, um futuro
+-- descuido ao criar uma policy de escrita em role_audit_log abriria a
+-- tabela por completo.
+--
+-- anon nunca deveria ter tido esses grants (não é mencionado no REVOKE
+-- original porque não deveria precisar — mas o diagnóstico ao vivo mostrou
+-- que anon também os tem hoje), então entra explicitamente aqui.
+REVOKE INSERT, UPDATE, DELETE ON public.role_audit_log FROM authenticated, anon, service_role;
