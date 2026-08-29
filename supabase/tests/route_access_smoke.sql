@@ -5,6 +5,38 @@
 BEGIN;
 
 -- ============================================================
+-- Seção 0 — Pós-condição da limpeza de órfãos (Finding I-2)
+-- ============================================================
+-- A migration 20260828134000 fez uma limpeza única das linhas de
+-- user_route_access cujo usuário não tem papel. Nada verificava que ela
+-- realmente zerou — e órfãos são silenciosos: não quebram nada hoje (a
+-- policy de SELECT exige papel E rota), mas voltariam a conceder rotas
+-- sozinhos se o usuário fosse reativado, sem passar por set_user_routes e
+-- sem deixar 'route_grant' na auditoria.
+--
+-- Roda PRIMEIRO, antes de qualquer seção criar fixtures. Isso é o que torna
+-- a asserção simples e sem manutenção: neste ponto da transação só existem
+-- as linhas reais do banco, então não é preciso excluir uuid de teste algum
+-- (a Seção 5.6, por exemplo, fabrica um órfão de propósito mais adiante).
+-- ============================================================
+DO $$
+DECLARE
+  v_orfaos int;
+BEGIN
+  SELECT count(*) INTO v_orfaos
+    FROM public.user_route_access ura
+   WHERE NOT EXISTS (
+           SELECT 1 FROM public.user_roles ur WHERE ur.user_id = ura.user_id
+         );
+
+  IF v_orfaos <> 0 THEN
+    RAISE EXCEPTION 'FALHA 0.1: % linha(s) órfã(s) em user_route_access (usuário sem papel). A limpeza de 20260828134000 não rodou, ou algo voltou a criar órfãos — investigar antes de reativar qualquer usuário', v_orfaos;
+  END IF;
+
+  RAISE NOTICE 'Seção 0 OK';
+END $$;
+
+-- ============================================================
 -- Seção 1 — Estrutura e RPC (Task 1)
 -- ============================================================
 DO $$
@@ -94,6 +126,43 @@ BEGIN
     RAISE EXCEPTION 'FALHA 1.11: cycle-time não foi concedida na substituição';
   END IF;
 
+  -- 1.12 — array VAZIO revoga tudo. É um caso de borda de verdade, não uma
+  -- variação de 1.10: `route <> ALL('{}')` é vacuamente verdadeiro para toda
+  -- linha, então o DELETE apaga tudo, e `unnest('{}')` não insere nada. Se
+  -- alguém trocar o `<> ALL` por outra construção (um NOT IN, por exemplo,
+  -- que com conjunto vazio se comporta diferente), a revogação total quebra
+  -- silenciosamente e nenhuma outra asserção pegaria.
+  PERFORM public.set_user_routes(v_target, ARRAY[]::public.app_route[]);
+  SELECT count(*) INTO v_count FROM public.user_route_access WHERE user_id = v_target;
+  IF v_count <> 0 THEN
+    RAISE EXCEPTION 'FALHA 1.12: array vazio deveria revogar todas as rotas, restaram %', v_count;
+  END IF;
+
+  -- 1.13 — RLS da própria user_route_access: cada um enxerga só as suas
+  -- linhas. As asserções acima passam por private.has_route, que é
+  -- SECURITY DEFINER e IGNORA RLS — ou seja, nada até aqui exercita as
+  -- policies route_access_select_own/_admin de fato.
+  PERFORM public.set_user_routes(v_target, ARRAY['alocacoes']::public.app_route[]);
+
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_target, 'role', 'authenticated')::text, true);
+  SELECT count(*) INTO v_count FROM public.user_route_access;
+  RESET ROLE;
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'FALHA 1.13: usuário comum deveria ver só a própria rota (1), viu %', v_count;
+  END IF;
+
+  -- 1.14 — e o admin enxerga as linhas de terceiros (policy _select_admin).
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  SELECT count(*) INTO v_count FROM public.user_route_access WHERE user_id = v_target;
+  RESET ROLE;
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'FALHA 1.14: admin deveria enxergar a rota de outro usuário, viu %', v_count;
+  END IF;
+
   RAISE NOTICE 'Seção 1 OK';
 END $$;
 
@@ -154,6 +223,20 @@ BEGIN
   RESET ROLE;
   IF NOT EXISTS (SELECT 1 FROM public.devs WHERE name = 'Smoke Com Rota') THEN
     RAISE EXCEPTION 'FALHA 2.3: editor com rota não conseguiu inserir em devs';
+  END IF;
+
+  -- 2.4 — leitura: editor COM rota alocacoes LÊ devs sob RLS real.
+  -- Contraponto positivo de 2.1: sem esta asserção, uma policy de SELECT
+  -- quebrada (que negasse a TODO mundo) passaria na suíte, porque 2.1 só
+  -- prova que quem não tem rota é barrado. 2.3 cobre o lado positivo da
+  -- ESCRITA; este cobre o da LEITURA, que é uma policy diferente.
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_editor_com_rota, 'role', 'authenticated')::text, true);
+  SELECT count(*) INTO v_count FROM public.devs;
+  RESET ROLE;
+  IF v_count = 0 THEN
+    RAISE EXCEPTION 'FALHA 2.4: editor com papel e rota alocacoes não leu nenhuma linha de devs — a policy de SELECT está negando a quem deveria permitir';
   END IF;
 
   RAISE NOTICE 'Seção 2 OK';
@@ -393,6 +476,44 @@ BEGIN
   END IF;
 
   RAISE NOTICE 'Seção 5.6 OK';
+END $$;
+
+-- ============================================================
+-- Seção 6 — Guarda W2004 (uuid inexistente em set_user_role)
+-- ============================================================
+-- Esta guarda já foi perdida silenciosamente UMA VEZ: a primeira versão da
+-- migration 20260828134000 reconstruiu set_user_role a partir de um corpo
+-- superado (20260808121000) em vez do corpo em produção (20260809100000),
+-- e teria revertido a guarda. Só foi pego por revisão manual, linha a linha.
+-- Nada na suíte pegaria uma terceira perda — esta seção é essa rede.
+-- ============================================================
+DO $$
+DECLARE
+  v_admin uuid := 'a1111111-1111-1111-1111-111111111111';
+  v_inexistente uuid := 'deadbeef-0000-0000-0000-000000000000';
+BEGIN
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+
+  -- 6.1 — conceder papel a um uuid que não existe em auth.users tem que
+  -- levantar W2004 ('Usuário não encontrado'), não um 23503 cru de FK.
+  -- A diferença importa: W2004 é mapeado para mensagem legível em
+  -- src/lib/admin-errors.ts; a violação de FK vazaria texto do Postgres
+  -- para a tela do admin.
+  BEGIN
+    PERFORM public.set_user_role(v_inexistente, 'viewer'::public.app_role);
+    RAISE EXCEPTION 'FALHA 6.1: set_user_role aceitou um uuid inexistente — a guarda W2004 sumiu do corpo da função';
+  EXCEPTION
+    WHEN sqlstate 'W2004' THEN NULL;
+    WHEN foreign_key_violation THEN
+      RAISE EXCEPTION 'FALHA 6.1: a FK barrou (23503), mas a guarda W2004 não rodou antes — o erro chega cru na UI em vez da mensagem tratada';
+  END;
+
+  -- 6.2 — a guarda é condicionada a _role IS NOT NULL: revogar (NULL) um
+  -- usuário inexistente não deve estourar, é no-op idempotente.
+  PERFORM public.set_user_role(v_inexistente, NULL);
+
+  RAISE NOTICE 'Seção 6 OK';
 END $$;
 
 ROLLBACK;
