@@ -231,18 +231,25 @@ GRANT EXECUTE ON FUNCTION public.delete_platform_user(uuid) TO authenticated;
 | --- | --- | --- |
 | Só administrador exclui | RPC (`private.has_role`) + `assertAdmin` na server fn + rota `/admin` já gateada | `W2001` |
 | Não exclui a própria conta | RPC | `W2005` (novo) |
-| Não exclui o último administrador | **trigger `guard_last_admin`**, já existente | `W2003` |
+| Não exclui o último administrador | consequência do `W2005` (ver abaixo); `guard_last_admin` continua como rede | `W2003` |
 | Usuário inexistente | RPC | `W2004` |
 
-A trava do último administrador **não é reimplementada**. `guard_last_admin` é
-`BEFORE DELETE ON public.user_roles` e já levanta `W2003` com a mensagem exata
-que `admin-errors.ts` mapeia. Como ela dispara dentro da RPC, a transação
-inteira aborta — inclusive o `DELETE` de `invitations` — e `auth.users` sequer
-é tocado, porque o passo 3 só roda se o passo 2 retornar sem erro.
+**A trava do último administrador não precisa de código novo — e `W2003` é
+inalcançável por esta RPC.** `guard_last_admin` conta os admins **excluindo o
+alvo**: `count(*) ... WHERE role = 'admin' AND user_id <> OLD.user_id`. Para
+chegar ao `DELETE`, o ator já passou pelo `W2001` (é admin) e pelo `W2005`
+(não é o alvo) — logo ele próprio é um admin diferente do alvo, e a contagem
+nunca chega a zero.
 
-Duplicar a checagem na RPC daria a mesma mensagem por um caminho a mais para
-sair de sincronia. A única perda é o caso do último admin **sem linha em
-`user_roles`** — que não existe: sem papel, ele não é admin.
+Dito de outro modo: o último administrador só poderia ser excluído **por ele
+mesmo**, e é exatamente isso que o `W2005` bloqueia. O critério de aceite é
+cumprido transitivamente, não por uma checagem própria.
+
+`guard_last_admin` permanece como rede para os caminhos **fora** desta RPC —
+um `DELETE` manual no SQL Editor, ou o `ON DELETE CASCADE` disparado por
+alguém apagando a conta direto pelo painel do Supabase. Se um dia a trava de
+autoexclusão for afrouxada, ela volta a ser o que segura a plataforma; por
+isso a suíte confirma que o trigger continua no lugar em vez de ignorá-lo.
 
 ### Por que `set_config(..., '')` no fim do branch
 
@@ -431,9 +438,16 @@ existentes (tudo em `BEGIN … ROLLBACK`, `RAISE NOTICE 'Seção N OK'`, falha =
 1. **Estrutura** — `'delete'` presente em `role_audit_action`;
    `delete_platform_user` existe, é `SECURITY DEFINER`, e o ACL não tem
    `EXECUTE` para `PUBLIC`/`anon`.
-2. **Invariantes** — não-admin recebe `W2001`; autoexclusão recebe `W2005`;
-   uuid inexistente recebe `W2004`; excluir o único admin recebe `W2003` e
-   **nada é apagado** (o `DELETE` de `invitations` também reverte).
+2. **Invariantes** — não-admin recebe `W2001`; autoexclusão recebe `W2005`
+   mesmo quando o ator é o único admin da plataforma (é o caso que cumpre o
+   critério do último administrador); uuid inexistente recebe `W2004`; o
+   trigger `guard_last_admin` continua wired em `public.user_roles`.
+
+   Os três erros são levantados **antes** de qualquer escrita, então não há
+   estado parcial a verificar — e não há como exercitar um erro posterior à
+   primeira escrita, justamente porque `W2003` ficou inalcançável. A
+   atomicidade do resto vem de graça: a RPC é PL/pgSQL, roda na transação de
+   quem chamou, e nenhuma das escritas está em bloco de exceção próprio.
 3. **Caminho feliz com papel** — papel e rotas somem; exatamente uma linha
    `delete` na auditoria, com `target_email`, `actor_user_id` e
    `previous_role` corretos; uma linha `route_revoke` por rota que existia;
@@ -453,9 +467,10 @@ roteiro manual.
 `npm run lint` sem escopo (CRLF pré-existente reprova arquivos não tocados).
 
 **Manual:** excluir um leitor comum e confirmar que some da lista e aparece no
-Histórico; tentar excluir a própria conta; tentar excluir o último admin;
-excluir um usuário com convite pendente e confirmar que o magic link antigo
-não recadastra com o papel original.
+Histórico como "Exclusão"; excluir um usuário "Sem acesso" e confirmar que
+também aparece no Histórico; confirmar que o botão da própria linha está
+desabilitado; excluir um usuário com convite pendente e confirmar que o magic
+link antigo não recadastra com o papel original.
 
 ## Riscos
 
