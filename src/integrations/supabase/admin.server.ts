@@ -113,3 +113,19 @@ export async function createInviteLink(input: {
 
   return { link };
 }
+
+// SEGUNDA metade da exclusão. Só pode rodar DEPOIS de a RPC
+// public.delete_platform_user ter retornado sem erro — os triggers de
+// auditoria resolvem o e-mail do alvo em auth.users, então apagar a conta
+// antes deixaria o evento sem identificação. Ver a migration
+// 20260829121000_user_delete_rpc.sql.
+export async function deleteAuthUser(targetId: string): Promise<void> {
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(targetId);
+  if (error) {
+    console.error("[admin] deleteUser falhou:", error);
+    // A mensagem descreve o estado real: a RPC já comitou, então o acesso
+    // está revogado mesmo com a conta ainda listada. Dizer só "não foi
+    // possível excluir" faria o admin achar que nada aconteceu.
+    throw new Error("O acesso foi revogado, mas a conta não pôde ser removida. Tente novamente.");
+  }
+}
