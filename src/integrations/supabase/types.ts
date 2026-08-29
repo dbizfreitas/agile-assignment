@@ -327,6 +327,7 @@ export type Database = {
         };
         Returns: string;
       };
+      delete_platform_user: { Args: { _target: string }; Returns: undefined };
       set_user_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"];
@@ -348,7 +349,14 @@ export type Database = {
       app_role: "admin" | "editor" | "viewer";
       app_route: "compromisso" | "cycle-time" | "retrospectivas" | "alocacoes";
       role_audit_action:
-        "invite" | "grant" | "revoke" | "bootstrap" | "cancel" | "route_grant" | "route_revoke";
+        | "invite"
+        | "grant"
+        | "revoke"
+        | "bootstrap"
+        | "cancel"
+        | "route_grant"
+        | "route_revoke"
+        | "delete";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -482,6 +490,7 @@ export const Constants = {
         "cancel",
         "route_grant",
         "route_revoke",
+        "delete",
       ],
     },
   },
