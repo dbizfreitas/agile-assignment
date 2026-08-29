@@ -191,6 +191,11 @@ BEGIN
      'smoke-nobody2@test.local', '', now(), now(), '{}'::jsonb, '{}'::jsonb, false);
 
   INSERT INTO public.user_roles (user_id, role) VALUES (v_viewer, 'viewer');
+  -- Task 2 (issue #23) passou a exigir também a rota alocacoes para ler o
+  -- board — sem esta linha, 3.7 abaixo simula um viewer que nunca existiria
+  -- de verdade (todo viewer real recebeu a rota, seja pelo backfill da
+  -- Task 1 ou por um convite/edição concedendo-a).
+  INSERT INTO public.user_route_access (user_id, route) VALUES (v_viewer, 'alocacoes');
 
   -- 3.1 — viewer não escreve em devs sob RLS real (não via RPC)
   SET LOCAL ROLE authenticated;
@@ -247,12 +252,14 @@ BEGIN
     RAISE EXCEPTION 'FALHA 3.7: viewer viu % devs, esperado % (RLS filtrando indevidamente)', v_count, v_total_devs;
   END IF;
 
-  -- 3.8 — as 4 policies novas existem de fato (não só a ausência das antigas)
+  -- 3.8 — as 4 policies novas existem de fato (não só a ausência das antigas).
+  -- Task 2 (issue #23) renomeou *_select_viewers para *_select_route (a
+  -- leitura passou a exigir também a rota alocacoes, não só o papel).
   IF (SELECT count(*) FROM pg_policies
       WHERE schemaname = 'public'
-        AND policyname IN ('devs_select_viewers', 'teams_select_viewers',
-                            'sprints_select_viewers', 'allocations_select_viewers')) <> 4 THEN
-    RAISE EXCEPTION 'FALHA 3.8: nem todas as 4 policies *_select_viewers existem';
+        AND policyname IN ('devs_select_route', 'teams_select_route',
+                            'sprints_select_route', 'allocations_select_route')) <> 4 THEN
+    RAISE EXCEPTION 'FALHA 3.8: nem todas as 4 policies *_select_route existem';
   END IF;
 
   RAISE NOTICE 'Seção 3 OK';
