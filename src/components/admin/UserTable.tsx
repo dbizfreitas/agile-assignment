@@ -55,7 +55,15 @@ export function UserTable({ currentUserId }: { currentUserId: string }) {
 
   // Guarda o usuário ALVO (não só o id): o diálogo continua exibindo nome e
   // e-mail durante a exclusão, e a linha some da lista no invalidate.
+  //
+  // A abertura é um estado SEPARADO, e `target` nunca volta a null no
+  // fechamento. Derivar `open` de `target !== null` parece mais enxuto, mas
+  // zerar o alvo ao fechar re-renderiza o texto sem ele enquanto o Radix
+  // ainda leva ~200 ms desaparecendo — a frase aparecia órfã ("perde o
+  // acesso imediatamente e sai desta lista.") em todo cancelamento. Manter o
+  // último alvo até a próxima abertura o sobrescrever custa nada.
   const [target, setTarget] = useState<PlatformUser | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const usersQ = useQuery({
     queryKey: ["platform-users"],
@@ -119,7 +127,7 @@ export function UserTable({ currentUserId }: { currentUserId: string }) {
     },
     onSuccess: () => {
       toast.success("Usuário excluído");
-      setTarget(null);
+      setConfirmOpen(false);
       void qc.invalidateQueries({ queryKey: ["platform-users"] });
       void qc.invalidateQueries({ queryKey: ["role-audit"] });
     },
@@ -260,7 +268,10 @@ export function UserTable({ currentUserId }: { currentUserId: string }) {
                         : "Excluir usuário"
                     }
                     aria-label={`Excluir ${u.email}`}
-                    onClick={() => setTarget(u)}
+                    onClick={() => {
+                      setTarget(u);
+                      setConfirmOpen(true);
+                    }}
                   >
                     <Trash2 className="size-3.5" />
                   </Button>
@@ -271,7 +282,7 @@ export function UserTable({ currentUserId }: { currentUserId: string }) {
         </Table>
       </div>
 
-      <AlertDialog open={target !== null} onOpenChange={(open) => !open && setTarget(null)}>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir usuário?</AlertDialogTitle>
