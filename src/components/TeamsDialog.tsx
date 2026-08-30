@@ -118,10 +118,22 @@ export function TeamsDialog({
   }
 
   // Pré-seleciona o destino no momento de abrir a confirmação, não via
-  // efeito: `teams` já está disponível aqui, e recalcular na abertura evita
-  // carregar um `moveTo` velho de uma exclusão anterior.
+  // efeito: `teams` já está disponível aqui, e recalcular a cada abertura
+  // evita carregar um `moveTo` velho de uma exclusão anterior — inclusive de
+  // uma exclusão anterior de um time COM pessoas, cancelada em seguida: como
+  // `startRemove` roda sempre que a confirmação abre, não existe caminho para
+  // um `moveTo` de uma chamada anterior sobreviver até a próxima.
   function startRemove(team: Team) {
     setRemoving(team);
+    // Time sem pessoas manda `_target` NULL, sempre: a RPC agora valida o
+    // destino sempre que ele não é nulo, mesmo quando o time de origem está
+    // vazio. Uma pré-seleção sobrando aqui faria uma exclusão sem nenhuma
+    // pessoa envolvida falhar por causa de um destino que o usuário nunca
+    // escolheu nem viu na tela (o caso "sem pessoas" não mostra Select).
+    if ((counts.get(team.id) ?? 0) === 0) {
+      setMoveTo("");
+      return;
+    }
     const others = teams.filter((t) => t.id !== team.id);
     const semTime = others.find((t) => t.name === "Sem time");
     setMoveTo(semTime?.id ?? others[0]?.id ?? "");
