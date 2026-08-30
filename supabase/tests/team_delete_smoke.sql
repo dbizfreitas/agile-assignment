@@ -13,7 +13,7 @@
 -- da RPC (W4002) em vez de testar private.can_edit_board(...) isoladamente.
 -- Isso NAO vale para o ator principal da suite (v_actor, Secao 1): ele
 -- recebe um papel em public.user_roles, e user_roles.user_id TEM FK para
--- auth.users (20260809100000_rbac_user_roles_fk.sql) - por isso a Secao 1
+-- auth.users (20260809100000_rbac_user_roles_fk.sql) — por isso a Secao 1
 -- insere v_actor em auth.users antes do INSERT em user_roles.
 --
 -- Todas as linhas de setup usam nomes prefixados _SMOKE_ para que um ROLLBACK
@@ -63,7 +63,7 @@ BEGIN
   -- user_roles.user_id TEM FK para auth.users (ON DELETE CASCADE, ver
   -- 20260809100000_rbac_user_roles_fk.sql), entao v_actor precisa existir la
   -- primeiro ou o INSERT em user_roles abaixo falha com 23503. auth.uid() em
-  -- si so le request.jwt.claims - mas a FK da tabela e outra checagem.
+  -- si so le request.jwt.claims — mas a FK da tabela e outra checagem.
   INSERT INTO auth.users
     (instance_id, id, aud, role, email, encrypted_password,
      email_confirmed_at, created_at, updated_at,
@@ -76,12 +76,22 @@ BEGIN
   PERFORM set_config('request.jwt.claims',
     json_build_object('sub', v_actor, 'role', 'authenticated')::text, true);
 
-  -- Dois times no mesmo projeto (A e B, PIM) e um terceiro em outro
-  -- projeto (C, PH), usado na Secao 5 para acionar W4006.
+  -- Dois times no mesmo projeto (A e B, SMOKEA) e um terceiro em outro
+  -- projeto (C, SMOKEB), usado na Secao 5 para acionar W4006.
+  --
+  -- SMOKEA/SMOKEB sao chaves de projeto sinteticas, de proposito distintas
+  -- de qualquer projeto real do quadro (ex.: PIM, o projeto padrao definido
+  -- em src/lib/projects.ts, ja povoado por times de producao). A RPC
+  -- renumera TODOS os times do projeto de origem apos o delete — um fixture
+  -- sobre uma chave real reescreveria a position de times de producao
+  -- dentro da transacao (contida pelo ROLLBACK, mas ainda assim tocando
+  -- linha pre-existente) e as asserts de position abaixo dependeriam de
+  -- quantos times reais ja existem, em vez de um valor fixo. Ambas batem
+  -- com teams_jira_project_format (^[A-Z][A-Z0-9]{1,9}$).
   INSERT INTO public.teams (id, name, jira_project, position) VALUES
-    (v_team_a, '_SMOKE_A_', 'PIM', 100),
-    (v_team_b, '_SMOKE_B_', 'PIM', 101),
-    (v_team_c, '_SMOKE_C_', 'PH', 100);
+    (v_team_a, '_SMOKE_A_', 'SMOKEA', 100),
+    (v_team_b, '_SMOKE_B_', 'SMOKEA', 101),
+    (v_team_c, '_SMOKE_C_', 'SMOKEB', 100);
 
   -- Duas pessoas em A (position 0 e 1) e uma em B (position 0), como pede a
   -- Secao 3 da task. jira_project de todas vem do trigger devs_set_project.
@@ -103,37 +113,39 @@ END $$;
 -- ============================================================
 DO $$
 DECLARE
-  v_actor      uuid := 'a1111111-1111-1111-1111-111111111111';
-  v_team_d     uuid := 'a6666666-6666-6666-6666-666666666666';
-  v_team_c     uuid := 'a5555555-5555-5555-5555-555555555555';
-  v_pim_pos    int[];
-  v_ph_c_pos   int;
+  v_actor       uuid := 'a1111111-1111-1111-1111-111111111111';
+  v_team_d      uuid := 'a6666666-6666-6666-6666-666666666666';
+  v_team_c      uuid := 'a5555555-5555-5555-5555-555555555555';
+  v_source_pos  int[];
+  v_other_pos   int;
 BEGIN
   PERFORM set_config('request.jwt.claims',
     json_build_object('sub', v_actor, 'role', 'authenticated')::text, true);
 
   INSERT INTO public.teams (id, name, jira_project, position) VALUES
-    (v_team_d, '_SMOKE_D_', 'PIM', 102);
+    (v_team_d, '_SMOKE_D_', 'SMOKEA', 102);
 
   PERFORM public.delete_team(v_team_d, NULL);
 
   ASSERT NOT EXISTS (SELECT 1 FROM public.teams WHERE id = v_team_d),
     'Secao 2: time vazio D sobreviveu a delete_team(D, NULL)';
 
-  -- Renumeracao (b) da RPC: com D fora, os times PIM que restam (A em 100 e
-  -- B em 101, da Secao 1) devem fechar o buraco e virar 0/1, na mesma ordem
-  -- relativa. Prova que a segunda CTE de renumeracao do delete_team roda.
-  SELECT array_agg(position ORDER BY position) INTO v_pim_pos
-    FROM public.teams WHERE jira_project = 'PIM';
-  ASSERT v_pim_pos = ARRAY[0, 1],
-    format('Secao 2: positions dos times PIM deviam virar 0/1 apos apagar D, achou %s', v_pim_pos);
+  -- Renumeracao (b) da RPC: com D fora, os times SMOKEA que restam (A em
+  -- 100 e B em 101, da Secao 1) devem fechar o buraco e virar 0/1, na mesma
+  -- ordem relativa. Prova que a segunda CTE de renumeracao do delete_team
+  -- roda. So funciona como valor fixo porque SMOKEA e uma chave sintetica
+  -- sem nenhum time de producao: ver o comentario no fixture da Secao 1.
+  SELECT array_agg(position ORDER BY position) INTO v_source_pos
+    FROM public.teams WHERE jira_project = 'SMOKEA';
+  ASSERT v_source_pos = ARRAY[0, 1],
+    format('Secao 2: positions dos times SMOKEA deviam virar 0/1 apos apagar D, achou %s', v_source_pos);
 
-  -- E o time C, de outro projeto (PH), tem que continuar intocado: prova que
-  -- a renumeracao e escopada por jira_project e nao vaza para outros
+  -- E o time C, de outro projeto (SMOKEB), tem que continuar intocado: prova
+  -- que a renumeracao e escopada por jira_project e nao vaza para outros
   -- projetos.
-  SELECT position INTO v_ph_c_pos FROM public.teams WHERE id = v_team_c;
-  ASSERT v_ph_c_pos = 100,
-    format('Secao 2: time C (PH) deveria seguir na position 100, achou %s', v_ph_c_pos);
+  SELECT position INTO v_other_pos FROM public.teams WHERE id = v_team_c;
+  ASSERT v_other_pos = 100,
+    format('Secao 2: time C (SMOKEB) deveria seguir na position 100, achou %s', v_other_pos);
 
   RAISE NOTICE 'Secao 2 OK';
 END $$;
@@ -174,8 +186,8 @@ BEGIN
 
   SELECT array_agg(DISTINCT jira_project) INTO v_projects
     FROM public.devs WHERE id IN (v_dev_a1, v_dev_a2, v_dev_b1);
-  ASSERT v_projects = ARRAY['PIM'],
-    format('Secao 3: jira_project das 3 pessoas deveria ser so PIM, achou %s', v_projects);
+  ASSERT v_projects = ARRAY['SMOKEA'],
+    format('Secao 3: jira_project das 3 pessoas deveria ser so SMOKEA, achou %s', v_projects);
 
   RAISE NOTICE 'Secao 3 OK';
 END $$;
