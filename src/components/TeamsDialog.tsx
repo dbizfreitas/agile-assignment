@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { ChevronDown, ChevronUp, Pencil } from "lucide-react";
-import { TEAM_COLORS, type Team } from "@/lib/board";
+import { TEAM_COLORS, type Dev, type Team } from "@/lib/board";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
 
@@ -46,20 +46,25 @@ export function TeamsDialog({
   });
   const teams = teamsQ.data ?? [];
 
-  // MESMA queryKey de devs do BoardGrid: quando este diálogo abre, o grid já
-  // está montado e a query está quente, então a contagem por time é
-  // essencialmente gratuita — nenhuma query de agregação nova entra no ar.
-  // O select mais estreito (id/name/team_id) só roda de verdade se o cache
-  // ainda não tiver sido preenchido pelo BoardGrid.
+  // MESMA queryKey de devs do BoardGrid, de propósito — e por isso o select,
+  // os filtros, a ordenação e o cast precisam ser IDÊNTICOS aos de lá. O
+  // TanStack Query v5 guarda uma única entrada por chave e usa a `queryFn`
+  // do observer que renderizou por último; se este diálogo registrasse um
+  // select mais estreito sob a mesma chave, um refetch em segundo plano
+  // disparado com o diálogo aberto rodaria essa versão e sobrescreveria o
+  // cache com linhas parciais, derrubando os campos que o grid e o DevDialog
+  // dependem para renderizar, ordenar e montar payloads de mutação.
   const devsQ = useQuery({
     queryKey: ["board", "devs", project],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("devs")
-        .select("id, name, team_id")
-        .eq("jira_project", project);
+        .select("*")
+        .eq("jira_project", project)
+        .order("position")
+        .order("name");
       if (error) throw error;
-      return data as { id: string; name: string; team_id: string }[];
+      return data as Dev[];
     },
   });
   const counts = useMemo(() => {
@@ -149,7 +154,17 @@ export function TeamsDialog({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["board", "teams"] });
     },
-    onError: (e: Error) => toast.error(boardErrorMessage(e)),
+    // Também invalida no erro, diferente de `save`: `save` é uma escrita
+    // única, que ou aplica ou não aplica. Esta mutation faz duas chamadas
+    // sequenciais e pode falhar entre elas — se a primeira `update` for bem
+    // sucedida e a segunda falhar, o banco fica com a posição parcialmente
+    // trocada enquanto a tela ainda mostra a ordem antiga. Sem invalidar
+    // aqui, o usuário veria só o toast de erro e continuaria clicando a
+    // partir de uma lista que não bate mais com o banco.
+    onError: (e: Error) => {
+      toast.error(boardErrorMessage(e));
+      qc.invalidateQueries({ queryKey: ["board", "teams"] });
+    },
   });
 
   function renderForm(key: string) {
