@@ -423,7 +423,7 @@ export function TeamsDialog({
                 {removing && removingCount > 0 && otherTeams.length === 0 ? (
                   <p>
                     Este é o único time do {project} e tem {pessoasPhrase(removingCount)}. Crie
-                    outro time para movê-las antes de excluir.
+                    outro time antes de excluir esse.
                   </p>
                 ) : null}
               </div>
