@@ -1,12 +1,27 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Link2 } from "lucide-react";
+import { Link2, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { generateInviteLink, listPlatformUsers } from "@/integrations/supabase/admin-fns";
+import {
+  deletePlatformUser,
+  generateInviteLink,
+  listPlatformUsers,
+} from "@/integrations/supabase/admin-fns";
 import { adminErrorMessage } from "@/lib/admin-errors";
-import { ROLE_DESCRIPTIONS, ROLE_LABELS, type AppRole } from "@/lib/admin";
+import { ROLE_DESCRIPTIONS, ROLE_LABELS, type AppRole, type PlatformUser } from "@/lib/admin";
 import { TABS, type AppRoute } from "@/components/shell/tabs";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -37,6 +52,10 @@ function formatDate(value: string | null): string {
 
 export function UserTable({ currentUserId }: { currentUserId: string }) {
   const qc = useQueryClient();
+
+  // Guarda o usuário ALVO (não só o id): o diálogo continua exibindo nome e
+  // e-mail durante a exclusão, e a linha some da lista no invalidate.
+  const [target, setTarget] = useState<PlatformUser | null>(null);
 
   const usersQ = useQuery({
     queryKey: ["platform-users"],
@@ -94,6 +113,19 @@ export function UserTable({ currentUserId }: { currentUserId: string }) {
     onError: (error) => toast.error(adminErrorMessage(error)),
   });
 
+  const removeUser = useMutation({
+    mutationFn: async (userId: string) => {
+      await deletePlatformUser({ data: { userId } });
+    },
+    onSuccess: () => {
+      toast.success("Usuário excluído");
+      setTarget(null);
+      void qc.invalidateQueries({ queryKey: ["platform-users"] });
+      void qc.invalidateQueries({ queryKey: ["role-audit"] });
+    },
+    onError: (error) => toast.error(adminErrorMessage(error)),
+  });
+
   if (usersQ.isLoading) {
     return (
       <p className="py-10 text-center text-sm text-muted-foreground">Carregando usuários...</p>
@@ -111,111 +143,161 @@ export function UserTable({ currentUserId }: { currentUserId: string }) {
   const users = usersQ.data ?? [];
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-surface">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>E-mail</TableHead>
-            <TableHead className="w-40">Papel</TableHead>
-            <TableHead className="w-44">Rotas</TableHead>
-            <TableHead className="w-32">Último acesso</TableHead>
-            <TableHead className="w-32">Situação</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {users.map((u) => (
-            <TableRow key={u.id}>
-              <TableCell className="font-medium">
-                {u.email}
-                {u.id === currentUserId ? (
-                  <span className="ml-2 text-[10px] text-muted-foreground">(você)</span>
-                ) : null}
-              </TableCell>
-              <TableCell>
-                <Select
-                  value={u.role ?? NO_ROLE}
-                  disabled={setRole.isPending}
-                  onValueChange={(value) =>
-                    setRole.mutate({
-                      userId: u.id,
-                      role: value === NO_ROLE ? null : (value as AppRole),
-                    })
-                  }
-                >
-                  <SelectTrigger className="h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(ROLE_LABELS) as AppRole[]).map((r) => (
-                      <SelectItem key={r} value={r}>
+    <>
+      <div className="overflow-hidden rounded-xl border border-border bg-surface">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>E-mail</TableHead>
+              <TableHead className="w-40">Papel</TableHead>
+              <TableHead className="w-44">Rotas</TableHead>
+              <TableHead className="w-32">Último acesso</TableHead>
+              <TableHead className="w-32">Situação</TableHead>
+              <TableHead className="w-12">
+                <span className="sr-only">Ações</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {users.map((u) => (
+              <TableRow key={u.id}>
+                <TableCell className="font-medium">
+                  {u.email}
+                  {u.id === currentUserId ? (
+                    <span className="ml-2 text-[10px] text-muted-foreground">(você)</span>
+                  ) : null}
+                </TableCell>
+                <TableCell>
+                  <Select
+                    value={u.role ?? NO_ROLE}
+                    disabled={setRole.isPending}
+                    onValueChange={(value) =>
+                      setRole.mutate({
+                        userId: u.id,
+                        role: value === NO_ROLE ? null : (value as AppRole),
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(ROLE_LABELS) as AppRole[]).map((r) => (
+                        <SelectItem key={r} value={r}>
+                          <span className="flex flex-col">
+                            <span>{ROLE_LABELS[r]}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {ROLE_DESCRIPTIONS[r]}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                      <SelectItem value={NO_ROLE}>
                         <span className="flex flex-col">
-                          <span>{ROLE_LABELS[r]}</span>
+                          <span>Sem acesso</span>
                           <span className="text-[10px] text-muted-foreground">
-                            {ROLE_DESCRIPTIONS[r]}
+                            Não enxerga a plataforma
                           </span>
                         </span>
                       </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+                <TableCell>
+                  <ToggleGroup
+                    type="multiple"
+                    size="sm"
+                    value={u.routes}
+                    disabled={setRoutes.isPending || u.role === null}
+                    onValueChange={(next) =>
+                      setRoutes.mutate({ userId: u.id, routes: next as AppRoute[] })
+                    }
+                  >
+                    {TABS.map((tab) => (
+                      <ToggleGroupItem
+                        key={tab.id}
+                        value={tab.id}
+                        title={tab.label}
+                        aria-label={tab.label}
+                      >
+                        <tab.icon className="size-4" />
+                      </ToggleGroupItem>
                     ))}
-                    <SelectItem value={NO_ROLE}>
-                      <span className="flex flex-col">
-                        <span>Sem acesso</span>
-                        <span className="text-[10px] text-muted-foreground">
-                          Não enxerga a plataforma
-                        </span>
+                  </ToggleGroup>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {formatDate(u.lastSignInAt)}
+                </TableCell>
+                <TableCell>
+                  {u.pendingInvite ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
+                        Pendente
                       </span>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </TableCell>
-              <TableCell>
-                <ToggleGroup
-                  type="multiple"
-                  size="sm"
-                  value={u.routes}
-                  disabled={setRoutes.isPending || u.role === null}
-                  onValueChange={(next) =>
-                    setRoutes.mutate({ userId: u.id, routes: next as AppRoute[] })
-                  }
-                >
-                  {TABS.map((tab) => (
-                    <ToggleGroupItem
-                      key={tab.id}
-                      value={tab.id}
-                      title={tab.label}
-                      aria-label={tab.label}
-                    >
-                      <tab.icon className="size-4" />
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              </TableCell>
-              <TableCell className="text-sm text-muted-foreground">
-                {formatDate(u.lastSignInAt)}
-              </TableCell>
-              <TableCell>
-                {u.pendingInvite ? (
-                  <div className="flex items-center gap-1.5">
-                    <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
-                      Pendente
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      title="Gerar e copiar um novo link de acesso"
-                      disabled={newLink.isPending}
-                      onClick={() => newLink.mutate(u.email)}
-                    >
-                      <Link2 className="size-3.5" />
-                    </Button>
-                  </div>
-                ) : (
-                  <span className="text-[11px] text-muted-foreground">Ativo</span>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title="Gerar e copiar um novo link de acesso"
+                        disabled={newLink.isPending}
+                        onClick={() => newLink.mutate(u.email)}
+                      >
+                        <Link2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground">Ativo</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-destructive"
+                    disabled={u.id === currentUserId || removeUser.isPending}
+                    title={
+                      u.id === currentUserId
+                        ? "Você não pode excluir a própria conta"
+                        : "Excluir usuário"
+                    }
+                    aria-label={`Excluir ${u.email}`}
+                    onClick={() => setTarget(u)}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <AlertDialog open={target !== null} onOpenChange={(open) => !open && setTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir usuário?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {target?.name ? `${target.name} (${target.email})` : target?.email} perde o acesso
+              imediatamente e sai desta lista. O histórico de alterações dele é mantido. Para
+              voltar, precisará de um acesso concedido de novo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removeUser.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={removeUser.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(event) => {
+                // Sem isto o Radix fecha o diálogo no clique, e uma falha na
+                // exclusão viraria um toast sem contexto nenhum na tela.
+                event.preventDefault();
+                if (target) removeUser.mutate(target.id);
+              }}
+            >
+              {removeUser.isPending ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
