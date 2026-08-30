@@ -4,17 +4,25 @@
 -- Sucesso = "Success. No rows returned" + um NOTICE 'Secao N OK' por secao.
 -- Falha = ERROR: com a mensagem do ASSERT que falhou.
 --
--- Nota sobre a Secao 6 (W4002): a suite simula o ator via
+-- Nota sobre a Secao 6 (W4002, sem papel algum): a suite simula o ator via
 -- set_config('request.jwt.claims', ...), o mesmo mecanismo usado pelas outras
 -- suites deste diretorio (ex.: user_delete_smoke.sql). auth.uid() so le essa
--- configuracao de sessao, entao o segundo ator da Secao 6 (v_no_role) nao
--- precisa de linha nem em auth.users nem em public.user_roles: ele existe
--- so como uuid solto, o suficiente para exercitar o caminho real de recusa
--- da RPC (W4002) em vez de testar private.can_edit_board(...) isoladamente.
--- Isso NAO vale para o ator principal da suite (v_actor, Secao 1): ele
--- recebe um papel em public.user_roles, e user_roles.user_id TEM FK para
--- auth.users (20260809100000_rbac_user_roles_fk.sql) — por isso a Secao 1
--- insere v_actor em auth.users antes do INSERT em user_roles.
+-- configuracao de sessao, entao o ator da Secao 6 (v_no_role) nao precisa de
+-- linha nem em auth.users nem em public.user_roles: ele existe so como uuid
+-- solto, o suficiente para exercitar o caminho real de recusa da RPC (W4002)
+-- em vez de testar private.can_edit_board(...) isoladamente.
+-- Isso NAO vale para o ator principal da suite (v_actor, Secao 1) nem para o
+-- ator da Secao 7 (v_no_route): ambos recebem um papel em public.user_roles,
+-- e user_roles.user_id TEM FK para auth.users (20260809100000_rbac_user_
+-- roles_fk.sql) — por isso os dois precisam de uma linha em auth.users antes
+-- do INSERT em user_roles.
+--
+-- Nota sobre a Secao 7 (W4002, papel sem rota): desde 20260830130000_team_
+-- delete_route_guard.sql, delete_team exige papel de edicao E a rota
+-- 'alocacoes' (o mesmo predicado das policies RLS que a funcao, sendo
+-- SECURITY DEFINER, contorna). v_no_route tem o papel mas nenhuma linha em
+-- public.user_route_access, entao a RPC deve recusar do mesmo jeito que a
+-- policy direta recusaria um SELECT dele em public.teams.
 --
 -- Todas as linhas de setup usam nomes prefixados _SMOKE_ para que um ROLLBACK
 -- que falhe por algum motivo fique obvio numa consulta manual. Nenhuma linha
@@ -73,6 +81,13 @@ BEGIN
      'team-delete-smoke-actor@test.local', '', now(), now(), now(), '{}'::jsonb, '{}'::jsonb, false);
 
   INSERT INTO public.user_roles (user_id, role) VALUES (v_actor, 'editor');
+
+  -- Papel sozinho nao basta mais (20260830130000_team_delete_route_guard.sql):
+  -- delete_team agora tambem exige a rota 'alocacoes', o mesmo predicado de
+  -- teams_delete_editors/devs_update_editors. Sem esta linha, todo caminho
+  -- feliz da suite (Secoes 2 e 3) cairia em W4002.
+  INSERT INTO public.user_route_access (user_id, route) VALUES (v_actor, 'alocacoes');
+
   PERFORM set_config('request.jwt.claims',
     json_build_object('sub', v_actor, 'role', 'authenticated')::text, true);
 
@@ -283,6 +298,52 @@ BEGIN
     'Secao 6: time B sumiu apos uma tentativa que deveria ter sido recusada';
 
   RAISE NOTICE 'Secao 6 OK';
+END $$;
+
+-- ============================================================
+-- Secao 7 — W4002: papel de edicao SEM a rota alocacoes
+-- ============================================================
+-- Este e o caso que realmente importa (20260830130000_team_delete_route_
+-- guard.sql): um ator com papel editor mas sem a rota alocacoes nao consegue
+-- nem fazer SELECT de uma linha de teams (teams_select_route exige a rota) e
+-- muito menos DELETE uma direto (teams_delete_editors exige papel E rota) —
+-- mas antes da correcao conseguia apagar o time inteiro pela RPC, porque ela
+-- so checava o papel. E mais forte que a Secao 6 (que testa a ausencia total
+-- de papel) porque isola exatamente o eixo que a correcao adiciona.
+DO $$
+DECLARE
+  v_no_route uuid := 'aa111111-1111-1111-1111-111111111111';
+  v_team_b   uuid := 'a4444444-4444-4444-4444-444444444444';
+BEGIN
+  -- user_roles.user_id tem FK para auth.users (mesma razao da Secao 1):
+  -- v_no_route precisa existir la antes do INSERT em user_roles abaixo.
+  INSERT INTO auth.users
+    (instance_id, id, aud, role, email, encrypted_password,
+     email_confirmed_at, created_at, updated_at,
+     raw_app_meta_data, raw_user_meta_data, is_super_admin)
+  VALUES
+    ('00000000-0000-0000-0000-000000000000', v_no_route, 'authenticated', 'authenticated',
+     'team-delete-smoke-noroute@test.local', '', now(), now(), now(), '{}'::jsonb, '{}'::jsonb, false);
+
+  -- Papel de edicao presente, de proposito — e o que faz este caso ser
+  -- diferente (e mais forte) do que a Secao 6 exercita. Nenhuma linha em
+  -- public.user_route_access: e essa ausencia que deve derrubar a chamada.
+  INSERT INTO public.user_roles (user_id, role) VALUES (v_no_route, 'editor');
+
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_no_route, 'role', 'authenticated')::text, true);
+
+  BEGIN
+    PERFORM public.delete_team(v_team_b, NULL);
+    ASSERT false, 'Secao 7: editor sem rota alocacoes conseguiu chamar delete_team';
+  EXCEPTION WHEN SQLSTATE 'W4002' THEN
+    NULL;
+  END;
+
+  ASSERT EXISTS (SELECT 1 FROM public.teams WHERE id = v_team_b),
+    'Secao 7: time B sumiu apos uma tentativa que deveria ter sido recusada';
+
+  RAISE NOTICE 'Secao 7 OK';
 END $$;
 
 ROLLBACK;
