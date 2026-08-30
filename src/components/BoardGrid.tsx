@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { CalendarPlus, ExternalLink, Pencil, Plus, Search, UserPlus } from "lucide-react";
+import { CalendarPlus, ExternalLink, Pencil, Plus, Search, UserPlus, Users } from "lucide-react";
 import {
   accentClassFor,
   chipClassFor,
@@ -32,6 +32,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { AllocationDialog, toDraft, type AllocationDraft } from "./AllocationDialog";
 import { DevDialog } from "./DevDialog";
 import { SprintDialog } from "./SprintDialog";
+import { TeamsDialog } from "./TeamsDialog";
 
 export function BoardGrid({
   canEdit,
@@ -58,6 +59,7 @@ export function BoardGrid({
     open: false,
     sprint: null,
   });
+  const [teamsDialog, setTeamsDialog] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<AllocationStatus | "todos">("todos");
   const [tipoFilter, setTipoFilter] = useState<AllocationTipo | "todos">("todos");
@@ -212,6 +214,13 @@ export function BoardGrid({
 
             {canEdit ? (
               <>
+                {/* Times primeiro: é a raiz do eixo de colunas, e a ordem na
+                    toolbar espelha a hierarquia dos dados (time → pessoa →
+                    sprint são as três dimensões, mas o time governa as
+                    outras). */}
+                <Button size="sm" variant="secondary" onClick={() => setTeamsDialog(true)}>
+                  <Users className="size-4" /> Times
+                </Button>
                 <Button
                   size="sm"
                   variant="secondary"
@@ -398,6 +407,7 @@ export function BoardGrid({
           project={project}
           onOpenChange={(o) => setSprintDialog({ open: o, sprint: o ? sprintDialog.sprint : null })}
         />
+        <TeamsDialog open={teamsDialog} project={project} onOpenChange={setTeamsDialog} />
       </div>
     </TooltipProvider>
   );
