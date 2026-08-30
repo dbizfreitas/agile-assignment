@@ -2,6 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -10,8 +20,15 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
-import { ChevronDown, ChevronUp, Pencil } from "lucide-react";
+import { ChevronDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
 import { TEAM_COLORS, type Dev, type Team } from "@/lib/board";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
@@ -80,6 +97,9 @@ export function TeamsDialog({
   const [draftName, setDraftName] = useState("");
   const [draftColor, setDraftColor] = useState(TEAM_COLORS[0]!);
 
+  const [removing, setRemoving] = useState<Team | null>(null);
+  const [moveTo, setMoveTo] = useState<string>("");
+
   // Limpa o formulário quando o diálogo fecha, não quando abre: diferente de
   // SprintDialog/DevDialog, não há um "item selecionado" vindo de fora para
   // reidratar — a lista inteira já vem da query, e o único estado local é o
@@ -95,6 +115,16 @@ export function TeamsDialog({
     setEditing(team.id);
     setDraftName(team.name);
     setDraftColor(team.color);
+  }
+
+  // Pré-seleciona o destino no momento de abrir a confirmação, não via
+  // efeito: `teams` já está disponível aqui, e recalcular na abertura evita
+  // carregar um `moveTo` velho de uma exclusão anterior.
+  function startRemove(team: Team) {
+    setRemoving(team);
+    const others = teams.filter((t) => t.id !== team.id);
+    const semTime = others.find((t) => t.name === "Sem time");
+    setMoveTo(semTime?.id ?? others[0]?.id ?? "");
   }
 
   function startNew() {
@@ -166,6 +196,38 @@ export function TeamsDialog({
       qc.invalidateQueries({ queryKey: ["board", "teams"] });
     },
   });
+
+  const remove = useMutation({
+    mutationFn: async () => {
+      if (!removing) return;
+      // RPC e não .delete(): mover as pessoas e apagar o time precisam estar na
+      // mesma transação. Ver a spec, "Decisão central".
+      const { error } = await supabase.rpc("delete_team", {
+        _team: removing.id,
+        _target: moveTo || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      // As duas invalidações são obrigatórias: a RPC mexe em `devs.team_id`
+      // (quem mudou de time) e em `devs.position` (renumeração dentro do time
+      // de destino) — sem a segunda o grid mostraria posições velhas.
+      qc.invalidateQueries({ queryKey: ["board", "teams"] });
+      qc.invalidateQueries({ queryKey: ["board", "devs"] });
+      setRemoving(null);
+    },
+    onError: (e: Error) => toast.error(boardErrorMessage(e)),
+  });
+
+  // Deriva os três casos da tabela da spec a partir do time em confirmação:
+  // contagem de pessoas e existência de outro time no projeto.
+  const removingCount = removing ? (counts.get(removing.id) ?? 0) : 0;
+  const otherTeams = removing ? teams.filter((t) => t.id !== removing.id) : [];
+  const removeDisabled =
+    remove.isPending ||
+    !removing ||
+    (removingCount > 0 && otherTeams.length === 0) ||
+    (removingCount > 0 && otherTeams.length > 0 && !moveTo);
 
   function renderForm(key: string) {
     return (
@@ -260,6 +322,15 @@ export function TeamsDialog({
                   >
                     <Pencil className="size-4" />
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label={`Excluir ${t.name}`}
+                    onClick={() => startRemove(t)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
                 </div>
               ),
             )
@@ -280,6 +351,80 @@ export function TeamsDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Confirmação simples, não nominal (sem digitar o nome do time): ao
+          contrário da exclusão de usuário em /admin, aqui nada é destruído
+          além do time em si — as pessoas apenas mudam de time, e os cartões
+          de alocação delas não são tocados. A assimetria com UserTable.tsx é
+          proposital; não "conserte" trazendo a confirmação nominal para cá. */}
+      <AlertDialog
+        open={removing !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setRemoving(null);
+            setMoveTo("");
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir time?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                {removing && removingCount === 0 ? (
+                  <p>O time &quot;{removing.name}&quot; será excluído.</p>
+                ) : null}
+
+                {removing && removingCount > 0 && otherTeams.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <p>Mover as {removingCount} pessoas para:</p>
+                    <Select value={moveTo} onValueChange={setMoveTo}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {otherTeams.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            <span className="flex items-center gap-2">
+                              <span
+                                className="size-2.5 shrink-0 rounded-full"
+                                style={{ backgroundColor: t.color }}
+                              />
+                              {t.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+
+                {removing && removingCount > 0 && otherTeams.length === 0 ? (
+                  <p>
+                    Este é o único time do {project} e tem {removingCount} pessoas. Crie outro time
+                    para movê-las antes de excluir.
+                  </p>
+                ) : null}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={remove.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={removeDisabled}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(event) => {
+                // Sem isto o Radix fecha o diálogo no clique, e uma falha na
+                // exclusão viraria um toast sem contexto nenhum na tela.
+                event.preventDefault();
+                remove.mutate();
+              }}
+            >
+              {remove.isPending ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
