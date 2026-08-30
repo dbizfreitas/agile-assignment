@@ -45,11 +45,12 @@ BEGIN
 
   SELECT count(*) INTO v_people FROM public.devs WHERE team_id = _team;
 
-  IF v_people > 0 THEN
-    IF _target IS NULL THEN
-      RAISE EXCEPTION 'Time com pessoas exige destino' USING ERRCODE = 'W4004';
-    END IF;
-
+  -- O destino e validado sempre que informado, independente de quantas
+  -- pessoas a origem tem: o contrato da RPC e "se _target veio, tem que ser
+  -- um time valido do mesmo projeto", nao "so valida se a origem tiver
+  -- gente". Sem isto, delete_team(<time vazio>, <uuid invalido ou de outro
+  -- projeto>) apagava a origem e ignorava o destino em silencio.
+  IF _target IS NOT NULL THEN
     IF _target = _team THEN
       RAISE EXCEPTION 'Destino igual a origem' USING ERRCODE = 'W4005';
     END IF;
@@ -61,12 +62,16 @@ BEGIN
 
     -- A ultima palavra continua sendo devs_team_project_fkey; esta checagem
     -- existe para a violacao virar um codigo com mensagem propria em vez de
-    -- um 23503 cru, e para fechar a invariante no servidor — a tela ja a
+    -- um 23503 cru, e para fechar a invariante no servidor - a tela ja a
     -- fecha por cima oferecendo so times do mesmo projeto.
     IF v_target_project IS DISTINCT FROM v_project THEN
       RAISE EXCEPTION 'Destino em outro projeto' USING ERRCODE = 'W4006';
     END IF;
+  ELSIF v_people > 0 THEN
+    RAISE EXCEPTION 'Time com pessoas exige destino' USING ERRCODE = 'W4004';
+  END IF;
 
+  IF v_people > 0 THEN
     -- Redispara devs_set_project, que recalcula jira_project a partir do novo
     -- time. Origem e destino sao do mesmo projeto, entao o valor nao muda.
     -- allocations nao e tocada: os cartoes seguem a PESSOA, nao o time.
@@ -78,7 +83,9 @@ BEGIN
   -- Renumeracao (a): pessoas realocadas chegam ao destino com as position que
   -- tinham na origem e colidem com as de la; duas pessoas com position = 0
   -- ficam em ordem indefinida e a coluna troca de ordem entre recargas.
-  IF v_people > 0 AND _target IS NOT NULL THEN
+  -- v_people > 0 basta como guarda: se _target viesse NULL com a origem
+  -- povoada, W4004 ja teria interrompido a funcao antes daqui.
+  IF v_people > 0 THEN
     WITH ord AS (
       SELECT id, (row_number() OVER (ORDER BY position, name)) - 1 AS pos
         FROM public.devs WHERE team_id = _target

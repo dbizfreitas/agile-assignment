@@ -7,15 +7,24 @@
 -- Nota sobre a Secao 6 (W4002): a suite simula o ator via
 -- set_config('request.jwt.claims', ...), o mesmo mecanismo usado pelas outras
 -- suites deste diretorio (ex.: user_delete_smoke.sql). auth.uid() so le essa
--- configuracao de sessao — nao depende de uma linha em auth.users — entao foi
--- possivel testar o caminho real da RPC (um ator cujo uuid nao tem linha em
--- public.user_roles) em vez de cair no fallback de verificar
--- private.can_edit_board(...) isoladamente.
+-- configuracao de sessao, entao o segundo ator da Secao 6 (v_no_role) nao
+-- precisa de linha nem em auth.users nem em public.user_roles: ele existe
+-- so como uuid solto, o suficiente para exercitar o caminho real de recusa
+-- da RPC (W4002) em vez de testar private.can_edit_board(...) isoladamente.
+-- Isso NAO vale para o ator principal da suite (v_actor, Secao 1): ele
+-- recebe um papel em public.user_roles, e user_roles.user_id TEM FK para
+-- auth.users (20260809100000_rbac_user_roles_fk.sql) - por isso a Secao 1
+-- insere v_actor em auth.users antes do INSERT em user_roles.
 --
 -- Todas as linhas de setup usam nomes prefixados _SMOKE_ para que um ROLLBACK
 -- que falhe por algum motivo fique obvio numa consulta manual. Nenhuma linha
 -- pre-existente e referenciada.
 BEGIN;
+
+-- Sem isto, um ASSERT que falha nao levanta nada quando o servidor roda com
+-- plpgsql.check_asserts desligado: a suite inteira passaria em branco sem
+-- provar nenhum dos comportamentos abaixo.
+SET LOCAL plpgsql.check_asserts = on;
 
 -- ============================================================
 -- Secao 1 — Setup e estrutura
@@ -51,8 +60,18 @@ BEGIN
   END IF;
 
   -- Ator com papel de edicao, usado por todas as chamadas felizes da suite.
-  -- Sem linha em auth.users de proposito: user_roles.user_id nao tem FK para
-  -- auth.users, e auth.uid() so le request.jwt.claims.
+  -- user_roles.user_id TEM FK para auth.users (ON DELETE CASCADE, ver
+  -- 20260809100000_rbac_user_roles_fk.sql), entao v_actor precisa existir la
+  -- primeiro ou o INSERT em user_roles abaixo falha com 23503. auth.uid() em
+  -- si so le request.jwt.claims - mas a FK da tabela e outra checagem.
+  INSERT INTO auth.users
+    (instance_id, id, aud, role, email, encrypted_password,
+     email_confirmed_at, created_at, updated_at,
+     raw_app_meta_data, raw_user_meta_data, is_super_admin)
+  VALUES
+    ('00000000-0000-0000-0000-000000000000', v_actor, 'authenticated', 'authenticated',
+     'team-delete-smoke-actor@test.local', '', now(), now(), now(), '{}'::jsonb, '{}'::jsonb, false);
+
   INSERT INTO public.user_roles (user_id, role) VALUES (v_actor, 'editor');
   PERFORM set_config('request.jwt.claims',
     json_build_object('sub', v_actor, 'role', 'authenticated')::text, true);
@@ -84,8 +103,11 @@ END $$;
 -- ============================================================
 DO $$
 DECLARE
-  v_actor  uuid := 'a1111111-1111-1111-1111-111111111111';
-  v_team_d uuid := 'a6666666-6666-6666-6666-666666666666';
+  v_actor      uuid := 'a1111111-1111-1111-1111-111111111111';
+  v_team_d     uuid := 'a6666666-6666-6666-6666-666666666666';
+  v_team_c     uuid := 'a5555555-5555-5555-5555-555555555555';
+  v_pim_pos    int[];
+  v_ph_c_pos   int;
 BEGIN
   PERFORM set_config('request.jwt.claims',
     json_build_object('sub', v_actor, 'role', 'authenticated')::text, true);
@@ -97,6 +119,21 @@ BEGIN
 
   ASSERT NOT EXISTS (SELECT 1 FROM public.teams WHERE id = v_team_d),
     'Secao 2: time vazio D sobreviveu a delete_team(D, NULL)';
+
+  -- Renumeracao (b) da RPC: com D fora, os times PIM que restam (A em 100 e
+  -- B em 101, da Secao 1) devem fechar o buraco e virar 0/1, na mesma ordem
+  -- relativa. Prova que a segunda CTE de renumeracao do delete_team roda.
+  SELECT array_agg(position ORDER BY position) INTO v_pim_pos
+    FROM public.teams WHERE jira_project = 'PIM';
+  ASSERT v_pim_pos = ARRAY[0, 1],
+    format('Secao 2: positions dos times PIM deviam virar 0/1 apos apagar D, achou %s', v_pim_pos);
+
+  -- E o time C, de outro projeto (PH), tem que continuar intocado: prova que
+  -- a renumeracao e escopada por jira_project e nao vaza para outros
+  -- projetos.
+  SELECT position INTO v_ph_c_pos FROM public.teams WHERE id = v_team_c;
+  ASSERT v_ph_c_pos = 100,
+    format('Secao 2: time C (PH) deveria seguir na position 100, achou %s', v_ph_c_pos);
 
   RAISE NOTICE 'Secao 2 OK';
 END $$;
@@ -164,6 +201,12 @@ BEGIN
   ASSERT EXISTS (SELECT 1 FROM public.teams WHERE id = v_team_b),
     'Secao 4: time B sumiu apos uma tentativa que deveria ter sido recusada';
 
+  -- W4004 levanta antes de qualquer UPDATE em devs nesta RPC, mas isto fica
+  -- como seguro barato contra uma reordenacao futura que escreva antes de
+  -- validar: B tinha 3 pessoas desde a realocacao da Secao 3.
+  ASSERT (SELECT count(*) FROM public.devs WHERE team_id = v_team_b) = 3,
+    'Secao 4: pessoas de B nao sobreviveram a uma tentativa que deveria ter sido recusada';
+
   RAISE NOTICE 'Secao 4 OK';
 END $$;
 
@@ -190,6 +233,11 @@ BEGIN
     'Secao 5: time B sumiu apos uma tentativa que deveria ter sido recusada';
   ASSERT EXISTS (SELECT 1 FROM public.teams WHERE id = v_team_c),
     'Secao 5: time C sumiu apos uma tentativa que deveria ter sido recusada';
+
+  -- W4006 tambem levanta antes de qualquer UPDATE em devs; mesma logica de
+  -- seguro barato da Secao 4.
+  ASSERT (SELECT count(*) FROM public.devs WHERE team_id = v_team_b) = 3,
+    'Secao 5: pessoas de B nao sobreviveram a uma tentativa que deveria ter sido recusada';
 
   RAISE NOTICE 'Secao 5 OK';
 END $$;
