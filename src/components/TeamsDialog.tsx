@@ -235,6 +235,13 @@ export function TeamsDialog({
   // contagem de pessoas e existência de outro time no projeto.
   const removingCount = removing ? (counts.get(removing.id) ?? 0) : 0;
   const otherTeams = removing ? teams.filter((t) => t.id !== removing.id) : [];
+  // Frase completa (artigo + número + substantivo), não o "pessoa(s)" da
+  // linha da lista: no diálogo de exclusão o texto é uma frase de verdade
+  // ("Mover a 1 pessoa", "... e tem 1 pessoa"), e uma marca de plural entre
+  // parênteses destoa de uma confirmação destrutiva. `n` sempre é > 0 nos
+  // dois lugares que chamam isto — o caso "sem pessoas" tem sua própria
+  // frase, sem contagem.
+  const pessoasPhrase = (n: number) => (n === 1 ? "1 pessoa" : `${n} pessoas`);
   const removeDisabled =
     remove.isPending ||
     !removing ||
@@ -389,7 +396,9 @@ export function TeamsDialog({
 
                 {removing && removingCount > 0 && otherTeams.length > 0 ? (
                   <div className="space-y-1.5">
-                    <p>Mover as {removingCount} pessoas para:</p>
+                    <p>
+                      Mover {removingCount === 1 ? "a" : "as"} {pessoasPhrase(removingCount)} para:
+                    </p>
                     <Select value={moveTo} onValueChange={setMoveTo}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione um time" />
@@ -413,8 +422,8 @@ export function TeamsDialog({
 
                 {removing && removingCount > 0 && otherTeams.length === 0 ? (
                   <p>
-                    Este é o único time do {project} e tem {removingCount} pessoas. Crie outro time
-                    para movê-las antes de excluir.
+                    Este é o único time do {project} e tem {pessoasPhrase(removingCount)}. Crie
+                    outro time para movê-las antes de excluir.
                   </p>
                 ) : null}
               </div>
