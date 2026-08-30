@@ -297,6 +297,12 @@ BEGIN
   ASSERT EXISTS (SELECT 1 FROM public.teams WHERE id = v_team_b),
     'Secao 6: time B sumiu apos uma tentativa que deveria ter sido recusada';
 
+  -- Mesma logica de seguro barato das Secoes 4 e 5: a recusa acontece antes
+  -- de qualquer escrita, mas confirmar as 3 pessoas de B tambem cobre uma
+  -- reordenacao futura que escreva antes de validar.
+  ASSERT (SELECT count(*) FROM public.devs WHERE team_id = v_team_b) = 3,
+    'Secao 6: pessoas de B nao sobreviveram a uma tentativa que deveria ter sido recusada';
+
   RAISE NOTICE 'Secao 6 OK';
 END $$;
 
@@ -313,7 +319,7 @@ END $$;
 DO $$
 DECLARE
   v_no_route uuid := 'aa111111-1111-1111-1111-111111111111';
-  v_team_b   uuid := 'a4444444-4444-4444-4444-444444444444';
+  v_team_e   uuid := 'ab111111-1111-1111-1111-111111111111';
 BEGIN
   -- user_roles.user_id tem FK para auth.users (mesma razao da Secao 1):
   -- v_no_route precisa existir la antes do INSERT em user_roles abaixo.
@@ -330,18 +336,39 @@ BEGIN
   -- public.user_route_access: e essa ausencia que deve derrubar a chamada.
   INSERT INTO public.user_roles (user_id, role) VALUES (v_no_route, 'editor');
 
+  -- Time E, vazio, criado so para esta secao. Precisa ser VAZIO e nao B:
+  -- B tem 3 pessoas, entao sob um guard revertido (so papel) a chamada
+  -- passaria da checagem de permissao e ainda assim levantaria W4004 (time
+  -- povoado sem destino) — um erro real, mas do subsistema errado, que
+  -- mascararia a checagem de permissao sendo o alvo deste teste. Com E vazio,
+  -- um guard revertido nao levanta excecao nenhuma: a chamada simplesmente
+  -- teria sucesso e apagaria E, o que aciona o ASSERT false abaixo com a
+  -- mensagem certa — prova de fato a escalada, em vez de ficar mascarada por
+  -- uma validacao de negocio que nada tem a ver com permissao. Inserido aqui
+  -- dentro da Secao 7 (a ultima do arquivo) para nao interferir em nenhuma
+  -- assert de position das secoes anteriores.
+  INSERT INTO public.teams (id, name, jira_project, position) VALUES
+    (v_team_e, '_SMOKE_E_', 'SMOKEA', 1);
+
   PERFORM set_config('request.jwt.claims',
     json_build_object('sub', v_no_route, 'role', 'authenticated')::text, true);
 
   BEGIN
-    PERFORM public.delete_team(v_team_b, NULL);
+    PERFORM public.delete_team(v_team_e, NULL);
     ASSERT false, 'Secao 7: editor sem rota alocacoes conseguiu chamar delete_team';
   EXCEPTION WHEN SQLSTATE 'W4002' THEN
     NULL;
   END;
 
-  ASSERT EXISTS (SELECT 1 FROM public.teams WHERE id = v_team_b),
-    'Secao 7: time B sumiu apos uma tentativa que deveria ter sido recusada';
+  ASSERT EXISTS (SELECT 1 FROM public.teams WHERE id = v_team_e),
+    'Secao 7: time E sumiu apos uma tentativa que deveria ter sido recusada';
+
+  -- Seguro barato, no mesmo espirito das Secoes 4, 5 e 6: E foi criado vazio
+  -- e deve continuar vazio, provando que a recusa aconteceu antes de
+  -- qualquer escrita em devs (nao que so por acaso nao havia ninguem para
+  -- mover).
+  ASSERT (SELECT count(*) FROM public.devs WHERE team_id = v_team_e) = 0,
+    'Secao 7: time E ganhou gente apos uma tentativa que deveria ter sido recusada';
 
   RAISE NOTICE 'Secao 7 OK';
 END $$;
