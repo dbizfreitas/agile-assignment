@@ -328,6 +328,10 @@ export type Database = {
         Returns: string;
       };
       delete_platform_user: { Args: { _target: string }; Returns: undefined };
+      delete_team: {
+        Args: { _team: string; _target?: string | null };
+        Returns: undefined;
+      };
       set_user_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"];
