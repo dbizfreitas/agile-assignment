@@ -3,6 +3,19 @@
 -- 20260831140000_alocacoes_auth_helpers.sql. Nenhum outro comportamento
 -- muda -- o corpo abaixo, fora da guarda, e identico ao de
 -- 20260830130000_team_delete_route_guard.sql.
+--
+-- Esta RPC e o motivo dos helpers existirem: sua primeira versao
+-- (20260830120000_team_delete_rpc.sql) checou so o papel, sem a rota, e
+-- produziu a escalada de privilegio corrigida em
+-- 20260830130000_team_delete_route_guard.sql. Fecha a duplicacao que
+-- deixou aquele buraco passar despercebido.
+--
+-- NOTA DE ORDEM DE DEPLOY: aplicar DEPOIS de
+-- 20260831140000_alocacoes_auth_helpers.sql. plpgsql nao resolve funcoes
+-- chamadas em tempo de CREATE, entao aplicar esta primeiro nao da erro na
+-- hora -- so quebra em runtime, com 42883 function private.can_edit_alocacoes
+-- does not exist em toda chamada de delete_team, ate a outra migration ser
+-- aplicada.
 CREATE OR REPLACE FUNCTION public.delete_team(_team uuid, _target uuid DEFAULT NULL)
 RETURNS void
 LANGUAGE plpgsql
