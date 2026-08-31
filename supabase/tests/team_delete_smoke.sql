@@ -103,10 +103,20 @@ BEGIN
   -- linha pre-existente) e as asserts de position abaixo dependeriam de
   -- quantos times reais ja existem, em vez de um valor fixo. Ambas batem
   -- com teams_jira_project_format (^[A-Z][A-Z0-9]{1,9}$).
-  INSERT INTO public.teams (id, name, jira_project, position) VALUES
-    (v_team_a, '_SMOKE_A_', 'SMOKEA', 100),
-    (v_team_b, '_SMOKE_B_', 'SMOKEA', 101),
-    (v_team_c, '_SMOKE_C_', 'SMOKEB', 100);
+  -- O trigger teams_set_position (20260831120000_team_insert_position_
+  -- trigger.sql, aplicado depois deste arquivo ter sido escrito) sobrescreve
+  -- SEMPRE a position de um INSERT, calculando o proximo valor a partir do
+  -- banco -- por isso o insert abaixo nao informa position, e as posicoes
+  -- esparsas que o teste precisa (100/101/100) sao fixadas depois, via
+  -- UPDATE: o trigger e BEFORE INSERT, nunca BEFORE UPDATE, entao um UPDATE
+  -- direto grava o valor exato que for passado.
+  INSERT INTO public.teams (id, name, jira_project) VALUES
+    (v_team_a, '_SMOKE_A_', 'SMOKEA'),
+    (v_team_b, '_SMOKE_B_', 'SMOKEA'),
+    (v_team_c, '_SMOKE_C_', 'SMOKEB');
+  UPDATE public.teams SET position = 100 WHERE id = v_team_a;
+  UPDATE public.teams SET position = 101 WHERE id = v_team_b;
+  UPDATE public.teams SET position = 100 WHERE id = v_team_c;
 
   -- Duas pessoas em A (position 0 e 1) e uma em B (position 0), como pede a
   -- Secao 3 da task. jira_project de todas vem do trigger devs_set_project.
@@ -137,8 +147,11 @@ BEGIN
   PERFORM set_config('request.jwt.claims',
     json_build_object('sub', v_actor, 'role', 'authenticated')::text, true);
 
-  INSERT INTO public.teams (id, name, jira_project, position) VALUES
-    (v_team_d, '_SMOKE_D_', 'SMOKEA', 102);
+  -- Mesmo motivo do fixture da Secao 1: o trigger sobrescreveria a position
+  -- se ela viesse no INSERT.
+  INSERT INTO public.teams (id, name, jira_project) VALUES
+    (v_team_d, '_SMOKE_D_', 'SMOKEA');
+  UPDATE public.teams SET position = 102 WHERE id = v_team_d;
 
   PERFORM public.delete_team(v_team_d, NULL);
 
