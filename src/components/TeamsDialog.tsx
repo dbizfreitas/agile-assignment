@@ -20,18 +20,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { ChevronDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
 import { TEAM_COLORS, type Dev, type Team } from "@/lib/board";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
+import { TeamColorSwatches, TeamSelectOption } from "@/components/TeamPickerControls";
 
 const NEW_TEAM = "__new__";
 
@@ -97,7 +92,15 @@ export function TeamsDialog({
   const [draftName, setDraftName] = useState("");
   const [draftColor, setDraftColor] = useState(TEAM_COLORS[0]!);
 
-  const [removing, setRemoving] = useState<Team | null>(null);
+  // Guarda só o id, não o Team inteiro: `removing` é derivado de `teams` logo
+  // abaixo, em vez de um segundo snapshot que poderia divergir da query (achado
+  // de simplificação no code review do PR #33). Efeito colateral aceito: se o
+  // time em confirmação for excluído por outra sessão enquanto o diálogo está
+  // aberto, `removing` vira `null` no próximo refetch e a confirmação fecha
+  // sozinha — não há mais time para confirmar, então isso é o comportamento
+  // certo, não uma regressão.
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const removing = teams.find((t) => t.id === removingId) ?? null;
   const [moveTo, setMoveTo] = useState<string>("");
 
   // Limpa o formulário quando o diálogo fecha, não quando abre: diferente de
@@ -124,7 +127,7 @@ export function TeamsDialog({
   // `startRemove` roda sempre que a confirmação abre, não existe caminho para
   // um `moveTo` de uma chamada anterior sobreviver até a próxima.
   function startRemove(team: Team) {
-    setRemoving(team);
+    setRemovingId(team.id);
     // Time sem pessoas manda `_target` NULL, sempre: a RPC agora valida o
     // destino sempre que ele não é nulo, mesmo quando o time de origem está
     // vazio. Uma pré-seleção sobrando aqui faria uma exclusão sem nenhuma
@@ -151,16 +154,25 @@ export function TeamsDialog({
       // jira_project NÃO entra no payload de update: é o que impede mover um
       // time entre projetos. No insert ele é obrigatório (teams é raiz do
       // eixo e a coluna não tem DEFAULT).
+      //
+      // `position` também não entra no insert: o trigger `teams_set_position`
+      // sempre recalcula o próximo valor a partir do que já está no banco.
+      // `teams.length` do cache deste diálogo pode estar desatualizado entre
+      // abas/sessões, e duas criações quase simultâneas lendo o mesmo
+      // `teams.length` inseririam dois times na mesma position (achado do
+      // code review do PR #33) — mandar o valor aqui seria ignorado mesmo,
+      // e mantê-lo sugeriria (errado) que o cliente ainda controla a posição.
       const res =
         editing === NEW_TEAM
-          ? await supabase
-              .from("teams")
-              .insert({ ...payload, position: teams.length, jira_project: project })
+          ? await supabase.from("teams").insert({ ...payload, jira_project: project })
           : await supabase.from("teams").update(payload).eq("id", editing!);
       if (res.error) throw res.error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["board", "teams"] });
+    onSuccess: async () => {
+      // `await` de propósito: sem ele, `save.isPending` libera o botão
+      // "Salvar" assim que o insert/update termina, antes do refetch
+      // atualizar `teams` — mesma classe de corrida do `reorder` abaixo.
+      await qc.invalidateQueries({ queryKey: ["board", "teams"] });
       setEditing(null);
     },
     onError: (e: Error) => toast.error(boardErrorMessage(e)),
@@ -178,23 +190,26 @@ export function TeamsDialog({
       const neighbour = teams[neighbourIdx];
       if (!current || !neighbour) return;
 
-      // Troca direta de position, duas chamadas sequenciais: não há
-      // `UNIQUE (jira_project, position)`, então não existe colisão a
-      // evitar com um passo intermediário.
-      const res1 = await supabase
-        .from("teams")
-        .update({ position: neighbour.position })
-        .eq("id", current.id);
+      // Troca direta de position, em paralelo: os dois valores já foram
+      // calculados acima, então uma escrita não depende do resultado da
+      // outra. Não há `UNIQUE (jira_project, position)`, então também não
+      // existe colisão a evitar com um passo intermediário.
+      const [res1, res2] = await Promise.all([
+        supabase.from("teams").update({ position: neighbour.position }).eq("id", current.id),
+        supabase.from("teams").update({ position: current.position }).eq("id", neighbour.id),
+      ]);
       if (res1.error) throw res1.error;
-
-      const res2 = await supabase
-        .from("teams")
-        .update({ position: current.position })
-        .eq("id", neighbour.id);
       if (res2.error) throw res2.error;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["board", "teams"] });
+    onSuccess: async () => {
+      // `await` de propósito, não `invalidateQueries(...)` solto: sem isto,
+      // `reorder.isPending` volta a `false` assim que as duas escritas
+      // terminam, ANTES do refetch atualizar `teams` — e um clique rápido
+      // em ↑/↓ logo em seguida leria posições já obsoletas do array local,
+      // podendo deixar dois times com a mesma `position` (achado do code
+      // review do PR #33). Aguardar aqui mantém os botões desabilitados até
+      // `teams` estar de fato atualizado.
+      await qc.invalidateQueries({ queryKey: ["board", "teams"] });
     },
     // Também invalida no erro, diferente de `save`: `save` é uma escrita
     // única, que ou aplica ou não aplica. Esta mutation faz duas chamadas
@@ -226,7 +241,7 @@ export function TeamsDialog({
       // de destino) — sem a segunda o grid mostraria posições velhas.
       qc.invalidateQueries({ queryKey: ["board", "teams"] });
       qc.invalidateQueries({ queryKey: ["board", "devs"] });
-      setRemoving(null);
+      setRemovingId(null);
     },
     onError: (e: Error) => toast.error(boardErrorMessage(e)),
   });
@@ -242,11 +257,12 @@ export function TeamsDialog({
   // dois lugares que chamam isto — o caso "sem pessoas" tem sua própria
   // frase, sem contagem.
   const pessoasPhrase = (n: number) => (n === 1 ? "1 pessoa" : `${n} pessoas`);
-  const removeDisabled =
-    remove.isPending ||
-    !removing ||
-    (removingCount > 0 && otherTeams.length === 0) ||
-    (removingCount > 0 && otherTeams.length > 0 && !moveTo);
+  // `startRemove` garante que `moveTo` fica "" sempre que `otherTeams` está
+  // vazio (não há Select pra preenchê-lo nesse caso), então checar
+  // `otherTeams.length === 0` aqui seria redundante com `!moveTo` — a
+  // simplificação abaixo depende desse invariante (achado do code review do
+  // PR #33).
+  const removeDisabled = remove.isPending || !removing || (removingCount > 0 && !moveTo);
 
   function renderForm(key: string) {
     return (
@@ -257,20 +273,7 @@ export function TeamsDialog({
           placeholder="Nome do time"
           autoFocus
         />
-        <div className="flex flex-wrap gap-2">
-          {TEAM_COLORS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setDraftColor(c)}
-              style={{ backgroundColor: c }}
-              className={`size-7 rounded-full transition-transform ${
-                draftColor === c ? "scale-110 ring-2 ring-ring ring-offset-2" : ""
-              }`}
-              aria-label={`Cor ${c}`}
-            />
-          ))}
-        </div>
+        <TeamColorSwatches value={draftColor} onChange={setDraftColor} />
         <div className="flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={() => setEditing(null)}>
             Cancelar
@@ -380,7 +383,7 @@ export function TeamsDialog({
         open={removing !== null}
         onOpenChange={(o) => {
           if (!o) {
-            setRemoving(null);
+            setRemovingId(null);
             setMoveTo("");
           }
         }}
@@ -405,15 +408,7 @@ export function TeamsDialog({
                       </SelectTrigger>
                       <SelectContent>
                         {otherTeams.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            <span className="flex items-center gap-2">
-                              <span
-                                className="size-2.5 shrink-0 rounded-full"
-                                style={{ backgroundColor: t.color }}
-                              />
-                              {t.name}
-                            </span>
-                          </SelectItem>
+                          <TeamSelectOption key={t.id} team={t} />
                         ))}
                       </SelectContent>
                     </Select>
