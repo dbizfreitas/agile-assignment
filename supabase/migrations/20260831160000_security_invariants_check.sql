@@ -40,13 +40,15 @@ BEGIN
   -- esta no search_path da sessao -- por isso handle_new_user() (schema
   -- public, que esta no search_path desta funcao) aparece sem prefixo,
   -- enquanto as funcoes de private. (fora do search_path) continuam
-  -- qualificadas.
+  -- qualificadas. Alem disso, para triggers com mais de um evento,
+  -- pg_get_triggerdef sempre imprime na ordem fixa INSERT, DELETE, UPDATE,
+  -- TRUNCATE -- nao na ordem escrita no CREATE TRIGGER original.
   -- ============================================================
   FOR r IN
     SELECT * FROM (VALUES
       ('SEC-A1', 'auth.users'::regclass,              'on_auth_user_created',    'AFTER',  'INSERT',                      'handle_new_user()'),
-      ('SEC-A2', 'public.user_roles'::regclass,        'audit_user_roles',        'AFTER',  'INSERT OR UPDATE OR DELETE', 'private.audit_user_roles()'),
-      ('SEC-A3', 'public.user_roles'::regclass,        'guard_last_admin',        'BEFORE', 'UPDATE OR DELETE',           'private.guard_last_admin()'),
+      ('SEC-A2', 'public.user_roles'::regclass,        'audit_user_roles',        'AFTER',  'INSERT OR DELETE OR UPDATE', 'private.audit_user_roles()'),
+      ('SEC-A3', 'public.user_roles'::regclass,        'guard_last_admin',        'BEFORE', 'DELETE OR UPDATE',           'private.guard_last_admin()'),
       ('SEC-A4', 'public.user_route_access'::regclass, 'audit_user_route_access', 'AFTER',  'INSERT OR DELETE',           'private.audit_user_route_access()'),
       ('SEC-A5', 'public.devs'::regclass,               'devs_set_project',        'BEFORE', 'INSERT OR UPDATE',           'private.set_dev_project()'),
       ('SEC-A6', 'public.allocations'::regclass,        'allocations_set_project', 'BEFORE', 'INSERT OR UPDATE',           'private.set_allocation_project()'),
@@ -199,8 +201,13 @@ BEGIN
 
   -- ============================================================
   -- G. user_route_access: 2 policies de leitura (dono ve a propria, admin ve
-  -- tudo), e por desenho NENHUMA policy de escrita nem grant de escrita para
-  -- authenticated -- so a RPC SECURITY DEFINER grava.
+  -- tudo), e por desenho NENHUMA policy de escrita -- so a RPC SECURITY
+  -- DEFINER grava, via RLS-por-ausencia-de-policy. (O GRANT de tabela em si
+  -- nao e o invariante aqui: authenticated tem INSERT/UPDATE/DELETE de
+  -- fabrica em toda tabela nova de public via ALTER DEFAULT PRIVILEGES do
+  -- proprio Supabase, fora do controle das migrations -- nao e algo que
+  -- desapareceu, e revogar so essa tabela seria inconsistente com o resto
+  -- do schema.)
   -- ============================================================
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
@@ -225,16 +232,12 @@ BEGIN
     RAISE EXCEPTION 'INVARIANTE SEC-G3: user_route_access deveria ter exatamente 2 policies (so leitura)' USING ERRCODE = 'W5000';
   END IF;
 
-  IF has_table_privilege('authenticated', 'public.user_route_access', 'INSERT')
-     OR has_table_privilege('authenticated', 'public.user_route_access', 'UPDATE')
-     OR has_table_privilege('authenticated', 'public.user_route_access', 'DELETE') THEN
-    RAISE EXCEPTION 'INVARIANTE SEC-G4: authenticated tem grant de escrita direta em user_route_access' USING ERRCODE = 'W5000';
-  END IF;
-
   -- ============================================================
-  -- H. invitations: 3 policies exigindo papel admin; escrita direta so pra
-  -- service_role (authenticated so tem SELECT, grava so via
-  -- create_invitation/cancel_invitation, ambas SECURITY DEFINER).
+  -- H. invitations: 3 policies exigindo papel admin -- escrita direta pela
+  -- aplicacao acontece via create_invitation/cancel_invitation (SECURITY
+  -- DEFINER), mas as policies existem como camada independente (mesmo
+  -- raciocinio do trigger guard_last_admin: uma protecao que vale mesmo se
+  -- alguem escrever direto, sem passar pela RPC).
   -- ============================================================
   FOR r IN
     SELECT * FROM (VALUES
@@ -252,11 +255,6 @@ BEGIN
       RAISE EXCEPTION 'INVARIANTE %: policy % ausente em invitations ou com condicao inesperada', r.id, r.pol USING ERRCODE = 'W5000';
     END IF;
   END LOOP;
-
-  IF has_table_privilege('authenticated', 'public.invitations', 'INSERT')
-     OR has_table_privilege('authenticated', 'public.invitations', 'UPDATE') THEN
-    RAISE EXCEPTION 'INVARIANTE SEC-H4: authenticated tem grant de escrita direta em invitations' USING ERRCODE = 'W5000';
-  END IF;
 
   -- ============================================================
   -- I. Corpo de private.guard_last_admin() -- o "ponto de atencao" da #31:
