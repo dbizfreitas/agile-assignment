@@ -320,4 +320,14 @@ BEGIN
   RAISE NOTICE 'Seção 4 OK';
 END $$;
 
+-- ============================================================
+-- Seção 5 — invariantes de segurança (issue #31): reafirma existência e
+-- definição dos objetos que já sumiram em silêncio 3 vezes neste projeto.
+-- ============================================================
+DO $$
+BEGIN
+  PERFORM private.assert_security_invariants();
+  RAISE NOTICE 'Seção 5 OK';
+END $$;
+
 ROLLBACK;
