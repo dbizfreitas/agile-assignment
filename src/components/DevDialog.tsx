@@ -23,6 +23,7 @@ import { Trash2 } from "lucide-react";
 import { TEAM_COLORS, initialsFrom, type Dev, type Team } from "@/lib/board";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
+import { TeamColorSwatches, TeamSelectOption } from "@/components/TeamPickerControls";
 
 const NEW_TEAM = "__new__";
 
@@ -177,15 +178,7 @@ export function DevDialog({
               </SelectTrigger>
               <SelectContent>
                 {teams.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    <span className="flex items-center gap-2">
-                      <span
-                        className="size-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: t.color }}
-                      />
-                      {t.name}
-                    </span>
-                  </SelectItem>
+                  <TeamSelectOption key={t.id} team={t} />
                 ))}
                 <SelectItem value={NEW_TEAM}>+ Criar novo time</SelectItem>
               </SelectContent>
@@ -205,20 +198,7 @@ export function DevDialog({
               </div>
               <div className="space-y-2">
                 <Label>Cor do time</Label>
-                <div className="flex flex-wrap gap-2">
-                  {TEAM_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setNewTeamColor(c)}
-                      style={{ backgroundColor: c }}
-                      className={`size-7 rounded-full transition-transform ${
-                        newTeamColor === c ? "scale-110 ring-2 ring-ring ring-offset-2" : ""
-                      }`}
-                      aria-label={`Cor ${c}`}
-                    />
-                  ))}
-                </div>
+                <TeamColorSwatches value={newTeamColor} onChange={setNewTeamColor} />
               </div>
             </div>
           ) : null}
