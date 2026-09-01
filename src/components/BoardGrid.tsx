@@ -169,8 +169,9 @@ export function BoardGrid({
   const years = useMemo(() => {
     const set = new Set(sprints.map(getSprintYear));
     set.add(new Date().getFullYear());
+    set.add(yearFilter); // o ano selecionado sempre tem opção correspondente
     return Array.from(set).sort((a, b) => a - b);
-  }, [sprints]);
+  }, [sprints, yearFilter]);
 
   const sprintsInYear = useMemo(
     () => sprints.filter((s) => getSprintYear(s) === yearFilter),
