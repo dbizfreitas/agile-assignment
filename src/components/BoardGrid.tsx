@@ -165,12 +165,13 @@ export function BoardGrid({
 
   // Anos com pelo menos uma sprint, mais o ano corrente sempre presente — sem
   // isso, o valor padrão do dropdown (ano corrente) poderia não ter opção
-  // correspondente na lista se nenhuma sprint cair nele.
+  // correspondente na lista se nenhuma sprint cair nele. Ordem decrescente: o
+  // ano mais recente primeiro, convenção usual em seletores de ano.
   const years = useMemo(() => {
     const set = new Set(sprints.map(getSprintYear));
     set.add(new Date().getFullYear());
     set.add(yearFilter); // o ano selecionado sempre tem opção correspondente
-    return Array.from(set).sort((a, b) => a - b);
+    return Array.from(set).sort((a, b) => b - a);
   }, [sprints, yearFilter]);
 
   const sprintsInYear = useMemo(
@@ -268,18 +269,21 @@ export function BoardGrid({
 
             {/* Fora do bloco `canEdit`: filtrar por ano é ação de
                 visualização, não de edição, e vale para leitor e editor. */}
-            <Select value={String(yearFilter)} onValueChange={(v) => setYearFilter(Number(v))}>
-              <SelectTrigger className="h-9 w-24" aria-label="Ano">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {years.map((y) => (
-                  <SelectItem key={y} value={String(y)}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Ano</span>
+              <Select value={String(yearFilter)} onValueChange={(v) => setYearFilter(Number(v))}>
+                <SelectTrigger className="h-9 w-24" aria-label="Ano">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-4 py-2">
