@@ -44,9 +44,13 @@ export function StatsCards({
 
   // Na visão "Concluídos", `vis` já É o conjunto de itens atendidos — o corte
   // entre "do compromisso" e "extra" é só a tag COMPROMISSO em categorias.
+  // Cabeçalho (SP é rollup das filhas) e item sem SP não contam pro SP do
+  // card — por isso também ficam de fora da contagem de itens e da consulta.
   const isCommitment = makeIsCommitmentIssueForSprint(sprintData);
-  const commitDoneItems = viewMode === "done" ? vis.filter(isCommitment) : [];
-  const extraDoneItems = viewMode === "done" ? vis.filter((i) => !isCommitment(i)) : [];
+  const commitDoneItems =
+    viewMode === "done" ? vis.filter((i) => isCommitment(i) && countableSP(i) > 0) : [];
+  const extraDoneItems =
+    viewMode === "done" ? vis.filter((i) => !isCommitment(i) && countableSP(i) > 0) : [];
   const commitDoneSP = commitDoneItems.reduce((s, i) => s + countableSP(i), 0);
   const extraDoneSP = extraDoneItems.reduce((s, i) => s + countableSP(i), 0);
 
