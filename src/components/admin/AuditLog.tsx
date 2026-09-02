@@ -78,7 +78,7 @@ export function AuditLog() {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
-        Registros com mais de 3 meses são removidos automaticamente.
+        Registros com mais de 90 dias são removidos automaticamente.
       </p>
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         <Table>

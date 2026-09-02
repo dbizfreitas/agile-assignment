@@ -51,6 +51,13 @@ GRANT EXECUTE ON FUNCTION private.purge_role_audit_log() TO service_role;
 -- de job só a partir de pg_cron 1.5 (unschedule + schedule explícito abaixo
 -- é o padrão seguro para qualquer versão: remove o job antigo se existir,
 -- depois recria).
+--
+-- O job pg_cron roda como o role que aplicou esta migration (tipicamente
+-- postgres, superuser no Supabase, dono desta função) — não como
+-- service_role. O GRANT EXECUTE ... TO service_role acima documenta quem
+-- a aplicação usaria se chamasse a função diretamente; o cron não passa
+-- por esse grant porque roda como owner/superuser, o que já basta para
+-- executar a função independente de GRANT.
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'purge-role-audit-log') THEN
@@ -63,3 +70,11 @@ SELECT cron.schedule(
   '0 3 * * *',
   $$SELECT private.purge_role_audit_log();$$
 );
+
+-- Verificação pós-aplicação (rodar no dia seguinte, para confirmar que o
+-- job não só foi registrado mas também executou com sucesso às 03:00 UTC):
+--
+-- SELECT status, return_message, start_time
+--   FROM cron.job_run_details
+--  WHERE jobid = (SELECT jobid FROM cron.job WHERE jobname = 'purge-role-audit-log')
+--  ORDER BY start_time DESC LIMIT 5;
