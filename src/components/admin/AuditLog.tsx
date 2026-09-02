@@ -76,8 +76,12 @@ export function AuditLog() {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-surface">
-      <Table>
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        Registros com mais de 3 meses são removidos automaticamente.
+      </p>
+      <div className="overflow-hidden rounded-xl border border-border bg-surface">
+        <Table>
         <TableHeader>
           <TableRow>
             <TableHead className="w-40">Quando</TableHead>
@@ -105,6 +109,7 @@ export function AuditLog() {
           ))}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }
