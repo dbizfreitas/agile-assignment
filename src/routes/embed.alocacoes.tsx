@@ -111,7 +111,9 @@ function EmbedAlocacoes() {
   // painel dentro da casca — sem barra de rolagem dupla.
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-background">
-      <BoardGrid canEdit={canEdit} project={project} />
+      {/* `key={project}`: mesmo motivo da aba /alocacoes — remonta o board e
+          reseta os filtros locais ao trocar de projeto via `?project=`. */}
+      <BoardGrid canEdit={canEdit} project={project} key={project} />
     </div>
   );
 }
