@@ -63,37 +63,25 @@ END $$;
 
 -- ============================================================
 -- Secao 3 -- authenticated, anon e service_role continuam sem
--- INSERT/UPDATE/DELETE direto em role_audit_log (a funcao de expurgo nao
--- pode ter reaberto esse caminho).
+-- INSERT/UPDATE/DELETE direto em role_audit_log, e o EXECUTE de
+-- private.purge_role_audit_log() continua fora do alcance de anon/PUBLIC
+-- (a funcao de expurgo nao pode ter reaberto nenhum desses caminhos).
+--
+-- Reutiliza private.assert_security_invariants() (SEC-C1 e SEC-B5, ver
+-- 20260902172122_security_invariants_role_audit_retention.sql) em vez de
+-- reimplementar a checagem aqui -- essas duas linhas de defesa ja sao o
+-- checker central do projeto, e duplicar a logica so criaria uma segunda
+-- fonte de verdade para o mesmo invariante (exatamente o padrao que ja
+-- causou regressoes silenciosas antes, ver cabecalho de 20260831160000).
+-- Chama a funcao inteira aqui: ela cobre bem mais que so retencao (todos os
+-- invariantes A-J), o que e aceitavel neste smoke test porque uma falha em
+-- qualquer invariante de seguranca do sistema e, de qualquer forma, motivo
+-- valido para este teste falhar tambem.
 -- ============================================================
 DO $$
-DECLARE
-  r record;
 BEGIN
-  FOR r IN
-    SELECT role_name, priv
-      FROM unnest(ARRAY['authenticated','anon','service_role']) AS role_name
-     CROSS JOIN unnest(ARRAY['INSERT','UPDATE','DELETE']) AS priv
-  LOOP
-    IF has_table_privilege(r.role_name, 'public.role_audit_log', r.priv) THEN
-      RAISE EXCEPTION 'FALHA 3.1: % tem % em role_audit_log (deveria ser somente leitura)', r.role_name, r.priv;
-    END IF;
-  END LOOP;
-
+  PERFORM private.assert_security_invariants();
   RAISE NOTICE 'Secao 3 OK';
-END $$;
-
--- ============================================================
--- Secao 4 -- EXECUTE de private.purge_role_audit_log() nao esta liberado
--- para anon/PUBLIC (so service_role deveria poder chama-la).
--- ============================================================
-DO $$
-BEGIN
-  IF has_function_privilege('anon', 'private.purge_role_audit_log()', 'EXECUTE') THEN
-    RAISE EXCEPTION 'FALHA 4.1: EXECUTE em purge_role_audit_log liberado para anon/PUBLIC';
-  END IF;
-
-  RAISE NOTICE 'Secao 4 OK';
 END $$;
 
 ROLLBACK;
