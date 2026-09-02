@@ -150,6 +150,15 @@ export function formatRange(start: string, end: string) {
 }
 
 /**
+ * Ano da sprint = ano do início, por fatiamento de string — mesmo cuidado de
+ * `formatDate`: `new Date("2026-08-15")` é meia-noite UTC e pode virar o dia
+ * (e, na virada do ano, o próprio ano) anterior em fusos negativos.
+ */
+export function getSprintYear(sprint: Pick<Sprint, "start_date">): number {
+  return Number(sprint.start_date.slice(0, 4));
+}
+
+/**
  * Uma sprint só é oferecida a uma pessoa quando cabe INTEIRA na janela de
  * disponibilidade dela — quem entra no meio de uma sprint aparece a partir da
  * seguinte. É contenção total, não sobreposição: quem tem meia sprint não

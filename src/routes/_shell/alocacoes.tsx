@@ -25,5 +25,8 @@ function AlocacoesPage() {
   // não são mais repassados: o logout e o link "Usuários" moram no cabeçalho
   // compartilhado.
   const { canEdit, project } = useShell();
-  return <BoardGrid canEdit={canEdit} project={project} />;
+  // `key={project}`: remonta o BoardGrid ao trocar de projeto, resetando os
+  // filtros locais (busca, status, tipo, ano) — sem isso, um filtro escolhido
+  // num projeto vazava para o próximo ao trocar de projeto sem recarregar.
+  return <BoardGrid canEdit={canEdit} project={project} key={project} />;
 }

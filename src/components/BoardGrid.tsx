@@ -3,6 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { CalendarPlus, ExternalLink, Pencil, Plus, Search, UserPlus, Users } from "lucide-react";
 import {
@@ -10,6 +17,7 @@ import {
   chipClassFor,
   formatAvailability,
   formatRange,
+  getSprintYear,
   isDevAvailableInSprint,
   sanitizeTickets,
   statusInfo,
@@ -64,6 +72,10 @@ export function BoardGrid({
   const [statusFilter, setStatusFilter] = useState<AllocationStatus | "todos">("todos");
   const [tipoFilter, setTipoFilter] = useState<AllocationTipo | "todos">("todos");
   const [dragOver, setDragOver] = useState<string | null>(null);
+  // Ano corrente do relógio, não o da sprint mais próxima — decisão da spec.
+  // Filtro local, sem persistência: reseta a cada carregamento, igual aos
+  // filtros de busca/status/tipo já existentes neste componente.
+  const [yearFilter, setYearFilter] = useState<number>(() => new Date().getFullYear());
 
   // As quatro queries são `select("*")` planas com um `.eq("jira_project", …)`
   // cada — sem `!inner`, sem query dependente: `devs` e `allocations` têm o
@@ -150,6 +162,23 @@ export function BoardGrid({
 
   const teams = teamsQ.data ?? [];
   const sprints = sprintsQ.data ?? [];
+
+  // Anos com pelo menos uma sprint, mais o ano corrente sempre presente — sem
+  // isso, o valor padrão do dropdown (ano corrente) poderia não ter opção
+  // correspondente na lista se nenhuma sprint cair nele. Ordem decrescente: o
+  // ano mais recente primeiro, convenção usual em seletores de ano.
+  const years = useMemo(() => {
+    const set = new Set(sprints.map(getSprintYear));
+    set.add(new Date().getFullYear());
+    set.add(yearFilter); // o ano selecionado sempre tem opção correspondente
+    return Array.from(set).sort((a, b) => b - a);
+  }, [sprints, yearFilter]);
+
+  const sprintsInYear = useMemo(
+    () => sprints.filter((s) => getSprintYear(s) === yearFilter),
+    [sprints, yearFilter],
+  );
+
   const allocations = allocQ.data ?? [];
 
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
@@ -237,6 +266,24 @@ export function BoardGrid({
                 </Button>
               </>
             ) : null}
+
+            {/* Fora do bloco `canEdit`: filtrar por ano é ação de
+                visualização, não de edição, e vale para leitor e editor. */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Ano</span>
+              <Select value={String(yearFilter)} onValueChange={(v) => setYearFilter(Number(v))}>
+                <SelectTrigger className="h-9 w-24" aria-label="Ano">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-4 py-2">
@@ -294,6 +341,12 @@ export function BoardGrid({
                 As alocações do {project} ainda não foram montadas.
               </p>
             )
+          ) : sprintsInYear.length === 0 ? (
+            <EmptyYearState
+              year={yearFilter}
+              canEdit={canEdit}
+              onAddSprint={() => setSprintDialog({ open: true, sprint: null })}
+            />
           ) : (
             <div className="h-full w-full overflow-x-hidden overflow-y-auto rounded-xl border border-grid-line bg-surface shadow-card board-scroll">
               <div
@@ -302,7 +355,7 @@ export function BoardGrid({
                   gridTemplateColumns: `minmax(0, 1fr) repeat(${devs.length}, minmax(0, 1fr))`,
                   gridTemplateRows: [
                     "auto",
-                    ...sprints.map((s) =>
+                    ...sprintsInYear.map((s) =>
                       sprintsWithCards.has(s.id) ? "minmax(104px, auto)" : "auto",
                     ),
                   ].join(" "),
@@ -352,7 +405,7 @@ export function BoardGrid({
                   );
                 })}
 
-                {sprints.map((s) => (
+                {sprintsInYear.map((s) => (
                   <SprintRow
                     key={s.id}
                     sprint={s}
@@ -658,6 +711,33 @@ function EmptyState({
           <CalendarPlus className="size-4" /> Adicionar sprint
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** Projeto tem sprint/pessoa cadastrada, só não nenhuma sprint no ano filtrado. */
+function EmptyYearState({
+  year,
+  canEdit,
+  onAddSprint,
+}: {
+  year: number;
+  canEdit: boolean;
+  onAddSprint: () => void;
+}) {
+  return (
+    <div className="mx-auto max-w-md rounded-xl border border-dashed border-grid-line bg-surface p-10 text-center">
+      <h2 className="text-lg font-semibold">Nenhuma sprint cadastrada em {year}</h2>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Troque o ano no filtro acima ou cadastre uma sprint com datas dentro de {year}.
+      </p>
+      {canEdit ? (
+        <div className="mt-6 flex justify-center">
+          <Button onClick={onAddSprint}>
+            <CalendarPlus className="size-4" /> Adicionar sprint
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
