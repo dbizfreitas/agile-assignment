@@ -1,5 +1,6 @@
 -- Suite de verificacao da retencao de role_audit_log (issue #28,
--- migration 20260902140819_role_audit_log_retention.sql).
+-- migrations 20260902140819_role_audit_log_retention.sql e
+-- 20260902150000_role_audit_log_purge_batching.sql).
 -- Roda inteiramente dentro de uma transacao com ROLLBACK: nao deixa residuo.
 -- Colar no SQL Editor do Supabase e executar por completo.
 -- Sucesso = "Success. No rows returned" + um NOTICE 'Secao N OK' por secao
@@ -59,6 +60,38 @@ BEGIN
   END IF;
 
   RAISE NOTICE 'Secao 2 OK';
+END $$;
+
+-- ============================================================
+-- Secao 2b -- expurgo pagina em lotes de 5000: gera 5003 linhas antigas
+-- (mais de um lote) e confirma que o loop varre todos os lotes, nao so o
+-- primeiro. Insercao em massa via generate_series para nao pesar o teste;
+-- ids gerados aleatoriamente pois nao precisam ser identificaveis.
+-- ============================================================
+DO $$
+DECLARE
+  v_id_recente uuid := 'b2222222-2222-2222-2222-222222222222';
+  v_sobras bigint;
+BEGIN
+  INSERT INTO public.role_audit_log (action, target_email, created_at)
+  SELECT 'grant', 'lote' || g || '@example.com', now() - interval '4 months'
+    FROM generate_series(1, 5003) AS g;
+
+  PERFORM private.purge_role_audit_log();
+
+  SELECT count(*) INTO v_sobras
+    FROM public.role_audit_log
+   WHERE created_at < now() - interval '90 days';
+
+  IF v_sobras <> 0 THEN
+    RAISE EXCEPTION 'FALHA 2b.1: expurgo em lotes deixou % linha(s) antiga(s) para tras (esperado 0)', v_sobras;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.role_audit_log WHERE id = v_id_recente) THEN
+    RAISE EXCEPTION 'FALHA 2b.2: linha recente nao deveria ter sido apagada pelo expurgo em lotes';
+  END IF;
+
+  RAISE NOTICE 'Secao 2b OK';
 END $$;
 
 -- ============================================================
