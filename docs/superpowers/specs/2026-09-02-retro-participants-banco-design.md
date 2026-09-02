@@ -72,8 +72,8 @@ adaptado ao runtime serverless deste projeto (Cloudflare Workers via Nitro).
 Os mesmos da #23: autorização no servidor é a fonte da verdade (RLS/RPC,
 nunca só esconder botão), deny by default, ator não forjável (`auth.uid()`).
 Estende-se ao Microsoft Graph: nenhuma credencial ou token chega ao client —
-tudo fica em módulos `*.server.ts` e numa tabela sem policy de leitura para
-`authenticated`.
+tudo fica em módulos `*.server.ts` e numa tabela (`public.ms_graph_token`)
+sem nenhuma policy de RLS para `authenticated`.
 
 ---
 
@@ -132,10 +132,15 @@ CREATE POLICY retro_roulette_state_select_route ON public.retro_roulette_state
 -- Sem policy de escrita: só as RPCs abaixo gravam.
 ```
 
-### Tabela `private.ms_graph_token`
+### Tabela `public.ms_graph_token`
 
-Fora do schema `public` — nunca exposta a `authenticated`, nem por acidente
-de uma policy futura genérica. Só tocada por `supabaseAdmin` (service role).
+Fica em `public` (não em `private`) por uma razão prática: `supabaseAdmin`
+(`src/integrations/supabase/client.server.ts`) é um client `supabase-js`
+comum, que só consegue tipar/consultar tabelas expostas via PostgREST no
+schema `public` sem configuração adicional de API (expor outro schema na API
+do Supabase é mudança de infraestrutura fora do escopo desta issue, e nenhum
+código do projeto hoje acessa um schema fora de `public` a partir do
+service-role client). A proteção não vem do schema, vem de **zero policies**:
 
 | coluna           | tipo        | nota                    |
 | ---------------- | ----------- | ----------------------- |
@@ -146,10 +151,12 @@ de uma policy futura genérica. Só tocada por `supabaseAdmin` (service role).
 | `updated_at`      | timestamptz | `default now()`         |
 
 ```sql
-INSERT INTO private.ms_graph_token (id) VALUES (true);
-ALTER TABLE private.ms_graph_token ENABLE ROW LEVEL SECURITY;
+INSERT INTO public.ms_graph_token (id) VALUES (true);
+ALTER TABLE public.ms_graph_token ENABLE ROW LEVEL SECURITY;
 -- Sem nenhuma policy: RLS habilitado + zero policies = ninguém em
--- `authenticated`/`anon` lê ou escreve. Só service_role (bypassa RLS).
+-- `authenticated`/`anon` lê ou escreve (mesmo padrão de proteção "RLS
+-- ligado, zero policies" já usado para blindar tabelas sensíveis no
+-- projeto). Só service_role (supabaseAdmin, que bypassa RLS) acessa.
 ```
 
 ### Helpers `private.can_view_retrospectivas` / `can_edit_retrospectivas`
@@ -297,7 +304,7 @@ disco (`.ms-token-cache.json`) e o cache de fotos em memória (TTL 24h). O
 persistente, sem garantia de memória compartilhada entre invocações. Isso
 exige duas adaptações:
 
-1. **Token persistido no Supabase**, não em arquivo: `private.ms_graph_token`.
+1. **Token persistido no Supabase**, não em arquivo: `public.ms_graph_token`.
 2. **Cache de foto persistido no Supabase**, não em memória do processo:
    colunas `photo_data_url`/`photo_fetched_at` em `retro_participants`.
 
@@ -326,7 +333,7 @@ temporárias no banco — complexidade real para uma ação que:
 via `npm run ms-graph:auth`) faz o device-code flow completo em processo
 próprio (com polling real, sem limitação de timeout de invocação), imprime
 o link + código no terminal, e ao concluir grava o token resultante direto em
-`private.ms_graph_token` usando um client Supabase com a service role key do
+`public.ms_graph_token` usando um client Supabase com a service role key do
 `.env` local. Depois de rodado uma vez, o app em produção só faz refresh
 automático (`token.server.ts`) — nunca mais precisa do device-code, a menos
 que o script seja rodado de novo manualmente.
@@ -337,7 +344,7 @@ Segue a mesma estrutura de `src/integrations/jira/` (client-safe `*-fns.ts`
 + lógica em `*.server.ts`, import dinâmico dentro do handler):
 
 - **`config.server.ts`** — lê `MS_TENANT_ID`/`MS_CLIENT_ID` de `process.env`.
-- **`token.server.ts`** — `getAccessToken()`: lê `private.ms_graph_token` via
+- **`token.server.ts`** — `getAccessToken()`: lê `public.ms_graph_token` via
   `supabaseAdmin`; se `expires_at` ainda válido, devolve `access_token`; senão
   tenta `refresh_token` contra `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token`
   e regrava a linha; se não houver `refresh_token` ou o refresh falhar, lança
@@ -448,7 +455,7 @@ LOCAL ROLE authenticated` + `request.jwt.claims`, `ROLLBACK` no final):
    `skipped_emails`.
 5. `spin_roulette()` com todos sorteados/ausentes lança `W2402`.
 6. `reset_roulette()` zera os três campos de estado.
-7. `private.ms_graph_token` não é lida por nenhuma policy de `authenticated`
+7. `public.ms_graph_token` não é lida por nenhuma policy de `authenticated`
    (tentativa de `SELECT` sob RLS simulada falha/retorna vazio).
 
 ### Roteiro manual
@@ -469,7 +476,7 @@ allowlist) e confirmar fallback de iniciais sem erro na tela.
 
 1. Migration A — tabelas `retro_participants` e `retro_roulette_state` + RLS
    de leitura + seed dos 20 participantes atuais.
-2. Migration B — `private.ms_graph_token` (sem policies) + helpers
+2. Migration B — `public.ms_graph_token` (sem policies) + helpers
    `can_view_retrospectivas`/`can_edit_retrospectivas`.
 3. Migration C — RPCs `spin_roulette`, `skip_participant`,
    `unskip_participant`, `unmark_participant`, `reset_roulette`.
