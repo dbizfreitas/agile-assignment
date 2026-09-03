@@ -62,10 +62,7 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
     },
   });
 
-  const drawn = useMemo(
-    () => new Set(stateQ.data?.drawnEmails ?? []),
-    [stateQ.data?.drawnEmails],
-  );
+  const drawn = useMemo(() => new Set(stateQ.data?.drawnEmails ?? []), [stateQ.data?.drawnEmails]);
   const skipped = useMemo(
     () => new Set(stateQ.data?.skippedEmails ?? []),
     [stateQ.data?.skippedEmails],
@@ -73,7 +70,8 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
   const lastWinner = stateQ.data?.lastWinnerEmail ?? null;
 
   const available = useMemo(
-    () => participants.filter((p) => !drawn.has(p.email) && !skipped.has(p.email)).map((p) => p.email),
+    () =>
+      participants.filter((p) => !drawn.has(p.email) && !skipped.has(p.email)).map((p) => p.email),
     [participants, drawn, skipped],
   );
 
