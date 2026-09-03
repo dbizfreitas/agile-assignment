@@ -13,9 +13,23 @@ const PHOTO_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias: fotos corporativas muda
 // de negative-cache bem mais curto que o de sucesso: tenta de novo em 1h
 // em vez de martelar a cada request, mas sem esperar 7 dias inteiros.
 const PHOTO_FAILURE_TTL_MS = 60 * 60 * 1000;
+// Achado do code review do PR #39: a correção acima conflava dois casos
+// bem diferentes só por ambos deixarem photo_data_url null — "o Graph
+// respondeu e a pessoa genuinamente não tem foto" (fato estável, devia
+// respeitar o TTL de 7 dias) e "a tentativa falhou/lançou" (transiente,
+// TTL curto de retry). String vazia é o sentinel para o primeiro caso —
+// distinto de null (nunca tentamos, ou a tentativa lançou) — sem precisar
+// de coluna nova; o client trata "" como "sem foto" (mesmo fallback de
+// iniciais que null/undefined), ver use-retro-photos.ts.
+const NO_PHOTO_SENTINEL = "";
 
-export async function fetchParticipantPhoto(email: string): Promise<string | null> {
-  if (!isAllowedEmail(email)) return null;
+// Retorna a data-URI da foto, NO_PHOTO_SENTINEL ("") se o Graph confirmou
+// que a pessoa não tem foto (resposta não-OK — tipicamente 404), ou lança
+// se a chamada em si falhar (rede, token, timeout) — esses dois casos
+// precisam ser distinguíveis para getCachedOrFetchPhoto aplicar o TTL
+// certo (ver comentário de NO_PHOTO_SENTINEL acima).
+export async function fetchParticipantPhoto(email: string): Promise<string> {
+  if (!isAllowedEmail(email)) return NO_PHOTO_SENTINEL;
 
   const { getAccessToken } = await import("./token.server");
   const token = await getAccessToken();
@@ -24,7 +38,7 @@ export async function fetchParticipantPhoto(email: string): Promise<string | nul
     `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(email)}/photo/$value`,
     { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) },
   );
-  if (!res.ok) return null;
+  if (!res.ok) return NO_PHOTO_SENTINEL;
 
   const buf = await res.arrayBuffer();
   const contentType = res.headers.get("content-type") ?? "image/jpeg";
@@ -45,15 +59,15 @@ export async function getCachedOrFetchPhoto(email: string): Promise<string | nul
 
   const ageMs =
     data.photo_fetched_at !== null ? Date.now() - new Date(data.photo_fetched_at).getTime() : null;
-  // Cache de sucesso (tem foto) usa o TTL longo; cache de falha (última
-  // tentativa não achou/errou, sem foto) usa o TTL curto de retry — os
-  // dois casos são distinguíveis só por photo_data_url ser null ou não,
-  // já que ambos gravam photo_fetched_at.
+  // TTL longo para qualquer resultado que o Graph já confirmou (foto real
+  // OU NO_PHOTO_SENTINEL, "sabidamente sem foto") — ambos são fatos
+  // estáveis. TTL curto só quando photo_data_url é null: a tentativa
+  // anterior lançou (falha transiente) ou nunca foi feita.
   const ttl = data.photo_data_url !== null ? PHOTO_TTL_MS : PHOTO_FAILURE_TTL_MS;
   const isFresh = ageMs !== null && ageMs < ttl;
   if (isFresh) return data.photo_data_url;
 
-  let dataUrl: string | null;
+  let dataUrl: string;
   try {
     dataUrl = await fetchParticipantPhoto(email);
   } catch (err) {

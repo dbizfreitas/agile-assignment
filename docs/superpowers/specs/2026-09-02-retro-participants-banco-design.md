@@ -334,7 +334,7 @@ via `npm run ms-graph:auth`) faz o device-code flow completo em processo
 próprio (com polling real, sem limitação de timeout de invocação), imprime
 o link + código no terminal, e ao concluir grava o token resultante direto em
 `public.ms_graph_token` usando um client Supabase com a service role key do
-`.env` local. Depois de rodado uma vez, o app em produção só faz refresh
+`.env.local` (nunca `.env`, que é versionado no git). Depois de rodado uma vez, o app em produção só faz refresh
 automático (`token.server.ts`) — nunca mais precisa do device-code, a menos
 que o script seja rodado de novo manualmente.
 

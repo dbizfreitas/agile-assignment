@@ -17,7 +17,11 @@ export function useRetroPhotos(emails: readonly string[]): Record<string, string
 
   const photos: Record<string, string | undefined> = {};
   emails.forEach((email, i) => {
-    photos[email] = results[i]?.data ?? undefined;
+    // "" é o sentinel de "Graph confirmou que a pessoa não tem foto" (ver
+    // NO_PHOTO_SENTINEL em photos.server.ts) — trata igual a null/undefined
+    // aqui, já que pra UI as duas coisas significam "mostra as iniciais".
+    const data = results[i]?.data;
+    photos[email] = data ? data : undefined;
   });
   return photos;
 }
