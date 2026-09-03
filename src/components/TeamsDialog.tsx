@@ -229,10 +229,8 @@ export function TeamsDialog({
       if (!removing) return;
       // RPC e não .delete(): mover as pessoas e apagar o time precisam estar na
       // mesma transação. Ver a spec, "Decisão central".
-      const { error } = await supabase.rpc("delete_team", {
-        _team: removing.id,
-        _target: moveTo || undefined,
-      });
+      const args = moveTo ? { _team: removing.id, _target: moveTo } : { _team: removing.id };
+      const { error } = await supabase.rpc("delete_team", args);
       if (error) throw error;
     },
     onSuccess: () => {

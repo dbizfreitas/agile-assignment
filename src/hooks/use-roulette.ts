@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { withRetroTypes } from "@/integrations/supabase/retro-types";
 import type { RetroParticipant } from "./use-retro-participants";
+
+const retroSupabase = withRetroTypes(supabase);
 
 // SQLSTATE customizados das RPCs do sorteio (mesmo padrão de src/lib/admin-errors.ts).
 const ROULETTE_ERROR_MESSAGES: Record<string, string> = {
@@ -75,7 +78,7 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
   const stateQ = useQuery({
     queryKey: ["retro-roulette-state"],
     queryFn: async (): Promise<RouletteState> => {
-      const { data, error } = await supabase
+      const { data, error } = await retroSupabase
         .from("retro_roulette_state")
         .select("drawn_emails, skipped_emails, last_winner_email")
         .eq("id", true)
@@ -108,7 +111,7 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
 
   const spinMutation = useMutation({
     mutationFn: async (): Promise<string> => {
-      const { data, error } = await supabase.rpc("spin_roulette");
+      const { data, error } = await retroSupabase.rpc("spin_roulette");
       if (error) throw error;
       return data;
     },
@@ -116,7 +119,7 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
 
   const skipMutation = useMutation({
     mutationFn: async (email: string) => {
-      const { error } = await supabase.rpc("skip_participant", { _email: email });
+      const { error } = await retroSupabase.rpc("skip_participant", { _email: email });
       if (error) throw error;
     },
     onSuccess: invalidateState,
@@ -125,7 +128,7 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
 
   const unskipMutation = useMutation({
     mutationFn: async (email: string) => {
-      const { error } = await supabase.rpc("unskip_participant", { _email: email });
+      const { error } = await retroSupabase.rpc("unskip_participant", { _email: email });
       if (error) throw error;
     },
     onSuccess: invalidateState,
@@ -134,7 +137,7 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
 
   const unmarkMutation = useMutation({
     mutationFn: async (email: string) => {
-      const { error } = await supabase.rpc("unmark_participant", { _email: email });
+      const { error } = await retroSupabase.rpc("unmark_participant", { _email: email });
       if (error) throw error;
     },
     onSuccess: invalidateState,
@@ -143,7 +146,7 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
 
   const resetMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.rpc("reset_roulette");
+      const { error } = await retroSupabase.rpc("reset_roulette");
       if (error) throw error;
     },
     onSuccess: invalidateState,
