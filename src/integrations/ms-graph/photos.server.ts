@@ -4,6 +4,7 @@
 // memória compartilhada entre invocações, diferente do processo Node de
 // vida longa do jira-live original).
 import { isAllowedEmail } from "./config.server";
+import { withRetroTypes } from "@/integrations/supabase/retro-types";
 
 const PHOTO_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias: fotos corporativas mudam raramente
 // Achado do code review do PR #38: sem isto, uma falha persistente (token
@@ -48,8 +49,9 @@ export async function fetchParticipantPhoto(email: string): Promise<string> {
 
 export async function getCachedOrFetchPhoto(email: string): Promise<string | null> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const retroAdmin = withRetroTypes(supabaseAdmin);
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await retroAdmin
     .from("retro_participants")
     .select("photo_data_url, photo_fetched_at")
     .eq("email", email)
@@ -75,7 +77,7 @@ export async function getCachedOrFetchPhoto(email: string): Promise<string | nul
     // Grava photo_fetched_at mesmo na falha (mantendo photo_data_url como
     // já estava) — sem isto, toda requisição futura reativa o mesmo fetch
     // fadado a falhar, pra sempre, até alguém notar manualmente.
-    const { error: markError } = await supabaseAdmin
+    const { error: markError } = await retroAdmin
       .from("retro_participants")
       .update({ photo_fetched_at: new Date().toISOString() })
       .eq("email", email);
@@ -84,7 +86,7 @@ export async function getCachedOrFetchPhoto(email: string): Promise<string | nul
     return data.photo_data_url;
   }
 
-  const { error: updateError } = await supabaseAdmin
+  const { error: updateError } = await retroAdmin
     .from("retro_participants")
     .update({ photo_data_url: dataUrl, photo_fetched_at: new Date().toISOString() })
     .eq("email", email);
