@@ -37,7 +37,8 @@ export async function getCachedOrFetchPhoto(email: string): Promise<string | nul
   if (!data) return null;
 
   const isFresh =
-    data.photo_fetched_at !== null && Date.now() - new Date(data.photo_fetched_at).getTime() < PHOTO_TTL_MS;
+    data.photo_fetched_at !== null &&
+    Date.now() - new Date(data.photo_fetched_at).getTime() < PHOTO_TTL_MS;
   if (isFresh && data.photo_data_url) return data.photo_data_url;
 
   let dataUrl: string | null;
