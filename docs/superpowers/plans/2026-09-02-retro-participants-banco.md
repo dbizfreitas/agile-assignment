@@ -16,7 +16,7 @@
 - `src/integrations/supabase/types.ts` é editado à mão (convenção já usada para `invitations`, `role_audit_log`, `allocations.tickets`, `user_route_access` — ver `docs/superpowers/plans/2026-08-28-permissoes-por-rota.md`), nunca regenerado automaticamente.
 - Arquivos `*.server.ts` só são importados estaticamente por outro `*.server.ts`; de `*-fns.ts`/componentes React, sempre `await import(...)` dinâmico dentro do handler.
 - Sem test runner no projeto: verificação de SQL é por smoke test em `supabase/tests/*_smoke.sql` (bloco `BEGIN; ... ROLLBACK;`, `DO $$ ... ASSERT ...`), colado manualmente no SQL Editor do Supabase pelo usuário — todo step que aplica migration ou smoke test termina pedindo confirmação do usuário antes de seguir.
-- Runtime local é Bun (`bunfig.toml` na raiz) — scripts standalone rodam via `bun run <arquivo>.ts`, sem `tsx`/`ts-node`.
+- Package manager do projeto é Bun (`bunfig.toml` na raiz, `bun.lock` versionado) — não editar `bun.lock` manualmente. O script standalone da Task 5 (`scripts/ms-graph-auth.ts`) roda via `tsx` (Node) em vez de `bun run`, para não depender de Bun estar no PATH de todo ambiente — ver decisão registrada na Task 5.
 - Comentários em português, só quando o "porquê" não é óbvio (convenção observada em todo o código existente).
 
 ---
@@ -953,8 +953,8 @@ export const getParticipantPhoto = createServerFn({ method: "GET" })
 
 ```ts
 // scripts/ms-graph-auth.ts
-// Script local, rodado manualmente uma vez (bun run scripts/ms-graph-auth.ts,
-// ou `npm run ms-graph:auth`): faz o device-code flow completo do Microsoft
+// Script local, rodado manualmente uma vez (`npm run ms-graph:auth`, via
+// tsx): faz o device-code flow completo do Microsoft
 // Graph (com polling real, sem a limitação de timeout de uma invocação
 // serverless) e grava o token resultante em public.ms_graph_token via
 // service role. Depois disso o app em produção só faz refresh automático
@@ -1073,28 +1073,38 @@ async function main(): Promise<void> {
 void main();
 ```
 
-- [ ] **Step 3: Adicionar o script ao `package.json`**
+- [ ] **Step 3: Adicionar `tsx` como devDependency**
+
+`bun` não está garantido no PATH de todo ambiente que for rodar este script (decisão registrada durante a execução do plano) — usar `tsx` (roda em Node puro) em vez de `bun run` para este script standalone.
+
+```bash
+npm install --save-dev tsx
+```
+
+- [ ] **Step 4: Adicionar o script ao `package.json`**
 
 Localizar o bloco `"scripts": { ... }` e adicionar, depois de `"format"`:
 
 ```json
-    "ms-graph:auth": "bun run scripts/ms-graph-auth.ts"
+    "ms-graph:auth": "tsx scripts/ms-graph-auth.ts"
 ```
 
-- [ ] **Step 4: Verificar TypeScript**
+- [ ] **Step 5: Verificar TypeScript**
 
 ```bash
 npx tsc --noEmit
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/integrations/ms-graph/server-fns.ts scripts/ms-graph-auth.ts package.json
+git add src/integrations/ms-graph/server-fns.ts scripts/ms-graph-auth.ts package.json package-lock.json
 git commit -m "feat(retrospectivas): getParticipantPhoto e script local de autorização OAuth
 
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 ```
+
+Nota: este `npm install` cria/atualiza `package-lock.json` no worktree, ainda que o projeto normalmente use `bun.lock`. Incluir o `package-lock.json` neste commit é aceitável (registra a devDependency nova de forma reproduzível fora do Bun); não editar `bun.lock` manualmente.
 
 - [ ] **Step 6: Pedir ao usuário para rodar a autorização**
 
