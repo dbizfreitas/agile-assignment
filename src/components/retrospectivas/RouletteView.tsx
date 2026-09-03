@@ -3,30 +3,28 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { useRoulette } from "@/hooks/use-roulette";
-import { getPhoto } from "@/lib/retrospectivas/photos";
-import {
-  avatarColor,
-  getInitials,
-  shortName,
-  PARTICIPANTS,
-} from "@/lib/retrospectivas/participants";
+import { useRetroParticipants } from "@/hooks/use-retro-participants";
+import { useRetroPhotos } from "@/hooks/use-retro-photos";
+import { avatarColor, getInitials, shortName } from "@/lib/retrospectivas/participants";
 import { ParticipantCard } from "./ParticipantCard";
 
 export function RouletteView() {
-  const roulette = useRoulette();
+  const { participants } = useRetroParticipants();
+  const roulette = useRoulette(participants);
+  const photos = useRetroPhotos(participants.map((p) => p.email));
 
   const drawnCount = roulette.drawn.size;
   const skippedCount = roulette.skipped.size;
   const plural = skippedCount > 1 ? "s" : "";
   const counter =
     skippedCount > 0
-      ? `${drawnCount} / ${PARTICIPANTS.length} sorteados · ${skippedCount} ausente${plural}`
-      : `${drawnCount} / ${PARTICIPANTS.length} sorteados`;
+      ? `${drawnCount} / ${participants.length} sorteados · ${skippedCount} ausente${plural}`
+      : `${drawnCount} / ${participants.length} sorteados`;
 
   // O card do vencedor vive aqui: são ~15 linhas de JSX que não se repetem em
   // lugar nenhum — extrair componente só espalharia props.
-  const winnerIndex = PARTICIPANTS.findIndex((p) => p.email === roulette.lastWinner);
-  const winner = winnerIndex === -1 ? undefined : PARTICIPANTS[winnerIndex];
+  const winnerIndex = participants.findIndex((p) => p.email === roulette.lastWinner);
+  const winner = winnerIndex === -1 ? undefined : participants[winnerIndex];
 
   return (
     // A roleta é a única das quatro sem rolagem interna própria, então ela
@@ -47,7 +45,7 @@ export function RouletteView() {
                 className="flex animate-in flex-col items-center gap-1 duration-300 zoom-in-95"
               >
                 <Avatar className="size-16 ring-2 ring-primary">
-                  <AvatarImage src={getPhoto(winner.email)} alt="" />
+                  <AvatarImage src={photos[winner.email]} alt="" />
                   <AvatarFallback
                     style={{ backgroundColor: avatarColor(winner, winnerIndex) }}
                     className="text-lg font-semibold text-white"
@@ -82,11 +80,12 @@ export function RouletteView() {
         </Card>
 
         <div className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-3">
-          {PARTICIPANTS.map((p, i) => (
+          {participants.map((p, i) => (
             <ParticipantCard
               key={p.email}
               participant={p}
               index={i}
+              photoUrl={photos[p.email]}
               drawn={roulette.drawn.has(p.email)}
               skipped={roulette.skipped.has(p.email)}
               highlighted={roulette.highlight === p.email}
