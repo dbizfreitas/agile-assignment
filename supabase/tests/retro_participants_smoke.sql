@@ -165,4 +165,38 @@ BEGIN
   RAISE NOTICE 'Seção 3 OK';
 END $$;
 
+-- ============================================================
+-- Seção 4 — regressão do achado de code review do PR #38: as 5 RPCs do
+-- sorteio travam a linha singleton (SELECT ... FOR UPDATE) antes de ler
+-- drawn_emails/skipped_emails, para que duas chamadas concorrentes não
+-- possam sortear o mesmo vencedor sob READ COMMITTED. Uma corrida real
+-- exige duas conexões simultâneas, que este formato de smoke test (uma
+-- sessão, BEGIN/ROLLBACK) não reproduz — em vez disso, confirma
+-- estruturalmente que o lock existe no corpo de cada função, o que é a
+-- garantia real por trás da correção (a fonte da função é o que executa
+-- em produção, não um teste de timing frágil).
+-- ============================================================
+DO $$
+DECLARE
+  r record;
+  v_src text;
+BEGIN
+  FOR r IN
+    SELECT * FROM (VALUES
+      ('spin_roulette', 'public.spin_roulette()'::regprocedure),
+      ('skip_participant', 'public.skip_participant(text)'::regprocedure),
+      ('unskip_participant', 'public.unskip_participant(text)'::regprocedure),
+      ('unmark_participant', 'public.unmark_participant(text)'::regprocedure),
+      ('reset_roulette', 'public.reset_roulette()'::regprocedure)
+    ) AS t(name, sig)
+  LOOP
+    SELECT prosrc INTO v_src FROM pg_proc WHERE oid = r.sig;
+    IF v_src IS NULL OR v_src NOT ILIKE '%FOR UPDATE%' THEN
+      RAISE EXCEPTION 'FALHA 4.1: % não trava a linha singleton (sem FOR UPDATE no corpo) — corrida entre chamadas concorrentes pode sortear/mutar em cima de estado obsoleto', r.name;
+    END IF;
+  END LOOP;
+
+  RAISE NOTICE 'Seção 4 OK';
+END $$;
+
 ROLLBACK;

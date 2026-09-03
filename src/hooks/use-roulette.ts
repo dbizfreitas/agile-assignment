@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,6 +58,19 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
   const [highlight, setHighlight] = useState<string | null>(null);
   const [spinning, setSpinning] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Achado do code review do PR #38: sem isto, navegar para fora de
+  // /retrospectivas (ou qualquer unmount) durante os ~1,4s da animação
+  // deixa o setInterval de spin() rodando sozinho contra closures de um
+  // componente já desmontado, até se auto-encerrar em TOTAL_FLASHES.
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
 
   const stateQ = useQuery({
     queryKey: ["retro-roulette-state"],
