@@ -3,8 +3,10 @@
 // em memória do processo — o runtime é serverless, sem garantia de
 // memória compartilhada entre invocações, diferente do processo Node de
 // vida longa do jira-live original).
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { isAllowedEmail } from "./config.server";
 import { withRetroTypes } from "@/integrations/supabase/retro-types";
+import type { Database } from "@/integrations/supabase/types";
 
 const PHOTO_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias: fotos corporativas mudam raramente
 // Achado do code review do PR #38: sem isto, uma falha persistente (token
@@ -47,11 +49,27 @@ export async function fetchParticipantPhoto(email: string): Promise<string> {
   return `data:${contentType};base64,${base64}`;
 }
 
-export async function getCachedOrFetchPhoto(email: string): Promise<string | null> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const retroAdmin = withRetroTypes(supabaseAdmin);
+// Achado da validação manual pós-deploy: supabaseAdmin (service role) exige
+// SUPABASE_SERVICE_ROLE_KEY configurada no ambiente — em dev local isso
+// nem sempre está disponível (a chave não é algo que se copia
+// informalmente, dá acesso total ao banco). retro_participants já tem
+// policy de SELECT liberando `authenticated` com a rota certa
+// (has_route(uid, 'retrospectivas')), então a LEITURA do cache funciona
+// com o client do próprio usuário (RLS), sem precisar de service role.
+// A ESCRITA do cache é diferente: a tabela não tem policy de escrita
+// para authenticated (decisão do design — gestão é manual), então um
+// UPDATE com o client do usuário falha por RLS. Nesse caso, degrada
+// graciosamente: a foto ainda é retornada certa pra esta chamada, só o
+// cache no banco não se atualiza (a próxima chamada tenta o Graph de
+// novo) — melhor que a leitura inteira falhar quando não há service
+// role disponível.
+export async function getCachedOrFetchPhoto(
+  email: string,
+  client: SupabaseClient<Database>,
+): Promise<string | null> {
+  const retroClient = withRetroTypes(client);
 
-  const { data, error } = await retroAdmin
+  const { data, error } = await retroClient
     .from("retro_participants")
     .select("photo_data_url, photo_fetched_at")
     .eq("email", email)
@@ -76,8 +94,10 @@ export async function getCachedOrFetchPhoto(email: string): Promise<string | nul
     console.error(`[ms-graph/photos] falha ao buscar foto de ${email}`, err);
     // Grava photo_fetched_at mesmo na falha (mantendo photo_data_url como
     // já estava) — sem isto, toda requisição futura reativa o mesmo fetch
-    // fadado a falhar, pra sempre, até alguém notar manualmente.
-    const { error: markError } = await retroAdmin
+    // fadado a falhar, pra sempre, até alguém notar manualmente. Se o
+    // client não tiver permissão de escrita (sem service role), markError
+    // só é logado — não interrompe a resposta ao usuário.
+    const { error: markError } = await retroClient
       .from("retro_participants")
       .update({ photo_fetched_at: new Date().toISOString() })
       .eq("email", email);
@@ -86,11 +106,13 @@ export async function getCachedOrFetchPhoto(email: string): Promise<string | nul
     return data.photo_data_url;
   }
 
-  const { error: updateError } = await retroAdmin
+  const { error: updateError } = await retroClient
     .from("retro_participants")
     .update({ photo_data_url: dataUrl, photo_fetched_at: new Date().toISOString() })
     .eq("email", email);
-  if (updateError) throw updateError;
+  if (updateError) {
+    console.error(`[ms-graph/photos] falha ao gravar cache de ${email}`, updateError);
+  }
 
   return dataUrl;
 }

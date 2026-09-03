@@ -14,5 +14,5 @@ export const getParticipantPhoto = createServerFn({ method: "GET" })
     await assertRouteAccess(context.supabase, context.userId, "retrospectivas");
 
     const { getCachedOrFetchPhoto } = await import("./photos.server");
-    return getCachedOrFetchPhoto(email);
+    return getCachedOrFetchPhoto(email, context.supabase);
   });
