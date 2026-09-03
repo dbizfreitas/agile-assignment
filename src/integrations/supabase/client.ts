@@ -2,6 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 import { brokeredPreviewStorage } from './previewAuthStorage';
+import { CONFIG_ERROR_MARKER } from '@/lib/config-error';
 
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith('sb_publishable_') || value.startsWith('sb_secret_');
@@ -35,11 +36,16 @@ function createSupabaseClient() {
   const SUPABASE_PUBLISHABLE_KEY = import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] || process.env['SUPABASE_PUBLISHABLE_KEY'];
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+    // Nomeia as VITE_*: sao essas que faltam num clone sem .env, e o Vite so
+    // as injeta a partir de um .env presente no diretorio do projeto.
     const missing = [
-      ...(!SUPABASE_URL ? ['SUPABASE_URL'] : []),
-      ...(!SUPABASE_PUBLISHABLE_KEY ? ['SUPABASE_PUBLISHABLE_KEY'] : []),
+      ...(!SUPABASE_URL ? ['VITE_SUPABASE_URL'] : []),
+      ...(!SUPABASE_PUBLISHABLE_KEY ? ['VITE_SUPABASE_PUBLISHABLE_KEY'] : []),
     ];
-    const message = `Missing Supabase environment variable(s): ${missing.join(', ')}. Connect Supabase in Lovable Cloud.`;
+    const message =
+      `${CONFIG_ERROR_MARKER} Faltam variaveis de ambiente do Supabase: ` +
+      `${missing.join(', ')}. Crie um .env na raiz do projeto com esses valores ` +
+      `(ver README.md). Em um clone novo, o arquivo .env versionado ja os traz.`;
     console.error(`[Supabase] ${message}`);
     throw new Error(message);
   }

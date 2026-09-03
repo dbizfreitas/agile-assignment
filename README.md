@@ -25,21 +25,35 @@ npm i
 npm run dev
 ```
 
-Um clone novo precisa de um `.env` na raiz com as credenciais públicas do
-Supabase antes do `npm run dev` funcionar (esse arquivo não é mais
-versionado — ver seção abaixo):
+### Variáveis de ambiente
 
-```sh
-SUPABASE_PROJECT_ID="<project-id>"
-SUPABASE_PUBLISHABLE_KEY="<publishable-key>"
-SUPABASE_URL="<project-url>"
-VITE_SUPABASE_PROJECT_ID="<project-id>"
-VITE_SUPABASE_PUBLISHABLE_KEY="<publishable-key>"
-VITE_SUPABASE_URL="<project-url>"
-```
+Um clone novo já funciona sem configuração: o `.env` da raiz **é versionado
+de propósito** e traz as credenciais públicas do Supabase.
 
-Pegue os três valores no painel do Supabase, projeto `nuvrdppxecbowxopbqcr`,
-em Project Settings → API (Project ID, `anon`/publishable key, Project URL).
+Isso é deliberado, não um descuido. O build do Lovable clona este repositório
+e o Vite só injeta `import.meta.env.VITE_*` a partir de arquivos `.env`
+presentes no clone. Sem um `.env` rastreado, todo push derruba o preview com
+*"Missing Supabase environment variable(s)"* — já aconteceu duas vezes
+(`2e7eae8`, revertido por `b3bab03`; e de novo em `c906cc5`). Também não
+adianta depender do `.env.production`: o Vite lê `.env` + `.env.<mode>`, então
+um build em modo development ignora o `.env.production` por completo.
+
+A regra que mantém isso seguro:
+
+| Arquivo | Versionado? | O que pode conter |
+|---|---|---|
+| `.env` | **Sim** | Só valores públicos: publishable key, URL, project ID |
+| `.env.production` | Sim | Idem, overrides do modo production |
+| `.env.local` | **Não** (gitignored) | Todos os segredos |
+
+Os valores do `.env` são públicos por design — o Vite já os embute no bundle
+JavaScript servido a qualquer visitante do site. A proteção dos dados vem de
+RLS no Supabase, não do sigilo desses valores.
+
+**Nunca coloque em `.env`:** `SUPABASE_SERVICE_ROLE_KEY` (bypassa RLS por
+completo), `MS_TENANT_ID`, `MS_CLIENT_ID`, tokens ou qualquer credencial.
+Esses vão em `.env.local`, que é gitignored e tem precedência sobre o `.env`
+no Vite.
 
 ## Migrations e setup pós-deploy pendentes
 

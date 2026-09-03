@@ -16,17 +16,26 @@ dist-ssr
 .nitro
 *.local
 
-# Secrets locais: .env já foi versionado historicamente (contém só valores
-# não sensíveis hoje), mas issue #24 passou a instruir colocar
-# SUPABASE_SERVICE_ROLE_KEY/MS_TENANT_ID/MS_CLIENT_ID em variáveis de
-# ambiente locais — segredo novo não pode ir para um arquivo rastreado.
-# Novo padrão: segredos ficam em .env.local (Vite já dá precedência a ele
-# sobre .env automaticamente), nunca em .env.
-.env
+# Segredos locais.
+#
+# .env É versionado de propósito e NÃO entra aqui: o build do Lovable clona
+# este repositório e o Vite só injeta `import.meta.env.VITE_*` a partir de
+# arquivos .env presentes no clone. Sem .env rastreado o preview quebra a
+# cada push com "Missing Supabase environment variable(s)" — já aconteceu
+# duas vezes (2e7eae8 revertido por b3bab03; de novo em c906cc5).
+#
+# A regra que substitui o gitignore do .env: o arquivo rastreado carrega
+# SOMENTE valores públicos (publishable key, URL, project ID — que o Vite
+# já embute no bundle servido ao browser). Todo segredo real
+# (SUPABASE_SERVICE_ROLE_KEY, MS_TENANT_ID, MS_CLIENT_ID, tokens) vive em
+# .env.local, ignorado abaixo. O Vite dá precedência a .env.local sobre
+# .env automaticamente.
+.env.local
+.env.*.local
+.dev.vars
 
 # Wrangler / Cloudflare
 .wrangler/
-.dev.vars
 
 # Superpowers brainstorming companion
 .superpowers/
