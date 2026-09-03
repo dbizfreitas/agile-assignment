@@ -724,7 +724,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `supabaseAdmin` de `src/integrations/supabase/client.server.ts` (import dinâmico); tabela `public.ms_graph_token` (Task 2); tabela `public.retro_participants` (Task 1, colunas `photo_data_url`/`photo_fetched_at`).
-- Produces: `getAccessToken(): Promise<string>` (`token.server.ts`); `fetchParticipantPhoto(email: string): Promise<{ dataUrl: string; contentType: string } | null>` (`photos.server.ts`); `getCachedOrFetchPhoto(email: string): Promise<string | null>` (`photos.server.ts`).
+- Produces: `getAccessToken(): Promise<string>` (`token.server.ts`); `fetchParticipantPhoto(email: string): Promise<string | null>` (`photos.server.ts` — retorna a data-URI já formatada, ou `null` se a foto não existir/domínio fora da allowlist); `getCachedOrFetchPhoto(email: string): Promise<string | null>` (`photos.server.ts`).
 
 - [ ] **Step 1: Criar `config.server.ts`**
 
