@@ -1,38 +1,12 @@
-// Fonte da verdade da lista da retro, versionada. Nome + e-mail corporativo não
-// são PII sensível — é exatamente o que já aparece no board. A foto, que é, mora
-// em photos-cache.ts, fora do git.
-//
-// Não derivamos de `devs`: aquela tabela não tem coluna de e-mail (que é a chave
-// do cache de fotos), e esta lista inclui gente da Shippit e papéis que não
-// recebem alocação. Um JOIN por nome seria frágil por homônimo e acentuação.
-export type Participant = { name: string; email: string; color?: string };
-
-export const PARTICIPANTS: readonly Participant[] = [
-  { name: "André Secco", email: "andre.secco@way2.com.br" },
-  { name: "Bruno Shippit", email: "bruno@shippit.app", color: "#0ea5e9" },
-  { name: "Christian Leonardo Chiavelli", email: "christian.chiavelli@way2.com.br" },
-  { name: "Daniel Alves", email: "daniel.alves@way2.com.br" },
-  { name: "Daniel Heler Pohlmann", email: "daniel.heler@way2.com.br" },
-  { name: "Diego Freitas", email: "diego.freitas@way2.com.br" },
-  { name: "Diego Martini Longhi", email: "diego.longhi@way2.com.br" },
-  { name: "Fábio Meira de Almeida", email: "fabio.almeida@way2.com.br" },
-  { name: "Fernando Gaio", email: "fernando.gaio@way2.com.br" },
-  { name: "Francisco das Chagas", email: "francisco.chagas@way2.com.br" },
-  { name: "Gilcelaine Portela da Luz", email: "gilcelaine.luz@way2.com.br" },
-  { name: "Guilherme de Oliveira França", email: "guilherme.franca@way2.com.br" },
-  { name: "Jaicon Algir Marmitt", email: "jaicon.marmitt@way2.com.br" },
-  { name: "José Shippit", email: "jose@shippit.app", color: "#0ea5e9" },
-  { name: "Lais Caroline Ortiz", email: "lais.ortiz@way2.com.br" },
-  { name: "Luiz Berti", email: "luizberti@shippit.app", color: "#0ea5e9" },
-  { name: "Rafaello Valladares Bertolini", email: "rafaello.bertolini@way2.com.br" },
-  { name: "Rinaldo Ferreira Junior", email: "rinaldo.junior@way2.com.br" },
-  { name: "Vitor Junior de Oliveira Souza", email: "vitor.souza@way2.com.br" },
-  { name: "Warley Thales da Silva Lopes", email: "warley.lopes@way2.com.br" },
-];
+// Funções puras de apresentação da retro — nome, cor, iniciais. Os dados
+// (nome/e-mail/cor/ordem) vêm de public.retro_participants via
+// use-retro-participants.ts (issue #24); este arquivo não conhece mais o
+// Supabase, só sabe formatar o que chega.
+export type Participant = { name: string; email: string; color?: string | null };
 
 // As mesmas 21 cores do legado, na mesma ordem: a cor de cada pessoa é
-// AVATAR_COLORS[i % 21]. Mudar a ordem da lista acima muda a cor de todo mundo
-// abaixo da mudança — é feio, mas é o comportamento que o time já conhece.
+// AVATAR_COLORS[i % 21]. Mudar a ordem da lista abaixo muda a cor de todo
+// mundo — é feio, mas é o comportamento que o time já conhece.
 export const AVATAR_COLORS: readonly string[] = [
   "#4f46e5",
   "#7c3aed",
@@ -68,9 +42,7 @@ export function paletteColor(index: number): string {
 }
 
 // Cor base do avatar: o `color` explícito (marcador de pessoal externo) tem
-// precedência sobre a paleta. Vale no grid E no card de vencedor — o legado
-// ignorava `color` no palco, o que deixava o externo com duas cores diferentes
-// na mesma tela (desvio 4).
+// precedência sobre a paleta. Vale no grid E no card de vencedor.
 export function avatarColor(p: Participant, index: number): string {
   return p.color ?? paletteColor(index);
 }
