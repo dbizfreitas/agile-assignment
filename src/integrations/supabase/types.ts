@@ -169,6 +169,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      ms_graph_token: {
+        Row: {
+          access_token: string | null;
+          expires_at: string | null;
+          id: boolean;
+          refresh_token: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          access_token?: string | null;
+          expires_at?: string | null;
+          id?: boolean;
+          refresh_token?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          access_token?: string | null;
+          expires_at?: string | null;
+          id?: boolean;
+          refresh_token?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       role_audit_log: {
         Row: {
           action: Database["public"]["Enums"]["role_audit_action"];
