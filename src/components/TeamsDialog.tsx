@@ -231,7 +231,7 @@ export function TeamsDialog({
       // mesma transação. Ver a spec, "Decisão central".
       const { error } = await supabase.rpc("delete_team", {
         _team: removing.id,
-        _target: moveTo || null,
+        _target: moveTo || undefined,
       });
       if (error) throw error;
     },
