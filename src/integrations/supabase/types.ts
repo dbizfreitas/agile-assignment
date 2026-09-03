@@ -208,6 +208,63 @@ export type Database = {
         };
         Relationships: [];
       };
+      retro_participants: {
+        Row: {
+          color: string | null;
+          created_at: string;
+          email: string;
+          id: string;
+          name: string;
+          photo_data_url: string | null;
+          photo_fetched_at: string | null;
+          sort_order: number;
+        };
+        Insert: {
+          color?: string | null;
+          created_at?: string;
+          email: string;
+          id?: string;
+          name: string;
+          photo_data_url?: string | null;
+          photo_fetched_at?: string | null;
+          sort_order: number;
+        };
+        Update: {
+          color?: string | null;
+          created_at?: string;
+          email?: string;
+          id?: string;
+          name?: string;
+          photo_data_url?: string | null;
+          photo_fetched_at?: string | null;
+          sort_order?: number;
+        };
+        Relationships: [];
+      };
+      retro_roulette_state: {
+        Row: {
+          drawn_emails: string[];
+          id: boolean;
+          last_winner_email: string | null;
+          skipped_emails: string[];
+          updated_at: string;
+        };
+        Insert: {
+          drawn_emails?: string[];
+          id?: boolean;
+          last_winner_email?: string | null;
+          skipped_emails?: string[];
+          updated_at?: string;
+        };
+        Update: {
+          drawn_emails?: string[];
+          id?: boolean;
+          last_winner_email?: string | null;
+          skipped_emails?: string[];
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       sprints: {
         Row: {
           code: string;
