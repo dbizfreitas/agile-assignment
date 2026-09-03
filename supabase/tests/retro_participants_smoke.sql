@@ -92,4 +92,77 @@ BEGIN
   RAISE NOTICE 'Seção 2 OK';
 END $$;
 
+-- ============================================================
+-- Seção 3 — RPCs do sorteio
+-- ============================================================
+DO $$
+DECLARE
+  v_editor uuid := 'b1111111-1111-1111-1111-111111111111';
+  v_viewer uuid := 'b3333333-3333-3333-3333-333333333333';
+  v_winner text;
+  v_state record;
+BEGIN
+  -- 3.1 — viewer (só rota, sem papel de editor) não consegue sortear
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_viewer, 'role', 'authenticated')::text, true);
+  BEGIN
+    PERFORM public.spin_roulette();
+    RAISE EXCEPTION 'FALHA 3.1: viewer conseguiu chamar spin_roulette';
+  EXCEPTION WHEN sqlstate 'W2001' THEN NULL;
+  END;
+
+  -- 3.2 — editor com rota consegue sortear, e o vencedor é um dos 20 seed
+  PERFORM set_config('request.jwt.claims',
+    json_build_object('sub', v_editor, 'role', 'authenticated')::text, true);
+  v_winner := public.spin_roulette();
+  IF NOT EXISTS (SELECT 1 FROM public.retro_participants WHERE email = v_winner) THEN
+    RAISE EXCEPTION 'FALHA 3.2: spin_roulette retornou e-mail fora da tabela de participantes: %', v_winner;
+  END IF;
+
+  SELECT * INTO v_state FROM public.retro_roulette_state;
+  IF NOT (v_winner = ANY(v_state.drawn_emails)) THEN
+    RAISE EXCEPTION 'FALHA 3.3: vencedor não foi adicionado a drawn_emails';
+  END IF;
+  IF v_state.last_winner_email <> v_winner THEN
+    RAISE EXCEPTION 'FALHA 3.4: last_winner_email não foi atualizado para o vencedor';
+  END IF;
+
+  -- 3.5 — sortear de novo nunca repete quem já foi sorteado
+  DECLARE
+    v_winner2 text;
+  BEGIN
+    v_winner2 := public.spin_roulette();
+    IF v_winner2 = v_winner THEN
+      RAISE EXCEPTION 'FALHA 3.5: spin_roulette sorteou o mesmo vencedor duas vezes seguidas';
+    END IF;
+  END;
+
+  -- 3.6 — skip_participant marca ausente, e o ausente não é mais elegível
+  PERFORM public.skip_participant('andre.secco@way2.com.br');
+  SELECT * INTO v_state FROM public.retro_roulette_state;
+  IF NOT ('andre.secco@way2.com.br' = ANY(v_state.skipped_emails)) THEN
+    RAISE EXCEPTION 'FALHA 3.6: skip_participant não marcou o e-mail como ausente';
+  END IF;
+
+  -- 3.7 — reset_roulette zera os três campos
+  PERFORM public.reset_roulette();
+  SELECT * INTO v_state FROM public.retro_roulette_state;
+  IF array_length(v_state.drawn_emails, 1) IS NOT NULL
+     OR array_length(v_state.skipped_emails, 1) IS NOT NULL
+     OR v_state.last_winner_email IS NOT NULL THEN
+    RAISE EXCEPTION 'FALHA 3.7: reset_roulette não zerou o estado';
+  END IF;
+
+  -- 3.8 — sortear com todos os 20 já sorteados/ausentes lança W2402
+  UPDATE public.retro_roulette_state
+     SET drawn_emails = (SELECT array_agg(email) FROM public.retro_participants);
+  BEGIN
+    PERFORM public.spin_roulette();
+    RAISE EXCEPTION 'FALHA 3.8: spin_roulette não lançou erro com todos já sorteados';
+  EXCEPTION WHEN sqlstate 'W2402' THEN NULL;
+  END;
+
+  RAISE NOTICE 'Seção 3 OK';
+END $$;
+
 ROLLBACK;

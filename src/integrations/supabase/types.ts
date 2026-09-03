@@ -413,6 +413,7 @@ export type Database = {
         Args: { _team: string; _target?: string | null };
         Returns: undefined;
       };
+      reset_roulette: { Args: Record<PropertyKey, never>; Returns: undefined };
       set_user_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"];
@@ -427,6 +428,10 @@ export type Database = {
         };
         Returns: undefined;
       };
+      skip_participant: { Args: { _email: string }; Returns: undefined };
+      spin_roulette: { Args: Record<PropertyKey, never>; Returns: string };
+      unmark_participant: { Args: { _email: string }; Returns: undefined };
+      unskip_participant: { Args: { _email: string }; Returns: undefined };
     };
     Enums: {
       allocation_status: "nao_especificada" | "especificada";
