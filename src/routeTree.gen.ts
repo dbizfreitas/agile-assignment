@@ -18,6 +18,7 @@ import { Route as ShellCompromissoRouteImport } from './routes/_shell/compromiss
 import { Route as ShellCycleTimeRouteImport } from './routes/_shell/cycle-time'
 import { Route as ShellRetrospectivasRouteImport } from './routes/_shell/retrospectivas'
 import { Route as EmbedAlocacoesRouteImport } from './routes/embed.alocacoes'
+import { Route as ApiPublicEnvprobeRouteImport } from './routes/api/public/envprobe'
 
 const ShellRoute = ShellRouteImport.update({
   id: '/_shell',
@@ -63,6 +64,11 @@ const EmbedAlocacoesRoute = EmbedAlocacoesRouteImport.update({
   path: '/embed/alocacoes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicEnvprobeRoute = ApiPublicEnvprobeRouteImport.update({
+  id: '/api/public/envprobe',
+  path: '/api/public/envprobe',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof ShellIndexRoute
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/cycle-time': typeof ShellCycleTimeRoute
   '/retrospectivas': typeof ShellRetrospectivasRoute
   '/embed/alocacoes': typeof EmbedAlocacoesRoute
+  '/api/public/envprobe': typeof ApiPublicEnvprobeRoute
 }
 export interface FileRoutesByTo {
   '/aceitar-convite': typeof AceitarConviteRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/retrospectivas': typeof ShellRetrospectivasRoute
   '/embed/alocacoes': typeof EmbedAlocacoesRoute
   '/': typeof ShellIndexRoute
+  '/api/public/envprobe': typeof ApiPublicEnvprobeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/_shell/retrospectivas': typeof ShellRetrospectivasRoute
   '/embed/alocacoes': typeof EmbedAlocacoesRoute
   '/_shell/': typeof ShellIndexRoute
+  '/api/public/envprobe': typeof ApiPublicEnvprobeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/cycle-time'
     | '/retrospectivas'
     | '/embed/alocacoes'
+    | '/api/public/envprobe'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/aceitar-convite'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/retrospectivas'
     | '/embed/alocacoes'
     | '/'
+    | '/api/public/envprobe'
   id:
     | '__root__'
     | '/_shell'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/_shell/retrospectivas'
     | '/embed/alocacoes'
     | '/_shell/'
+    | '/api/public/envprobe'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -135,6 +147,7 @@ export interface RootRouteChildren {
   AceitarConviteRoute: typeof AceitarConviteRoute
   AdminRoute: typeof AdminRoute
   EmbedAlocacoesRoute: typeof EmbedAlocacoesRoute
+  ApiPublicEnvprobeRoute: typeof ApiPublicEnvprobeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -202,6 +215,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EmbedAlocacoesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/envprobe': {
+      id: '/api/public/envprobe'
+      path: '/api/public/envprobe'
+      fullPath: '/api/public/envprobe'
+      preLoaderRoute: typeof ApiPublicEnvprobeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -228,6 +248,7 @@ const rootRouteChildren: RootRouteChildren = {
   AceitarConviteRoute: AceitarConviteRoute,
   AdminRoute: AdminRoute,
   EmbedAlocacoesRoute: EmbedAlocacoesRoute,
+  ApiPublicEnvprobeRoute: ApiPublicEnvprobeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
