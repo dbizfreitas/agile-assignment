@@ -49,14 +49,19 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const dcRes = await fetch(`https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/devicecode`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ client_id: CLIENT_ID!, scope: SCOPE }),
-  });
+  const dcRes = await fetch(
+    `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/devicecode`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: CLIENT_ID!, scope: SCOPE }),
+    },
+  );
   const dc = (await dcRes.json()) as DeviceCodeResponse;
   if (dc.error || !dc.verification_uri || !dc.user_code || !dc.device_code) {
-    console.error(`Erro ao pedir device code: ${dc.error ?? "resposta incompleta"} — ${dc.error_description ?? ""}`);
+    console.error(
+      `Erro ao pedir device code: ${dc.error ?? "resposta incompleta"} — ${dc.error_description ?? ""}`,
+    );
     process.exit(1);
   }
 
