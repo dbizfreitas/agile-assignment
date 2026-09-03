@@ -6,12 +6,23 @@
 // service role. Depois disso o app em produção só faz refresh automático
 // (src/integrations/ms-graph/token.server.ts).
 //
-// Pré-requisitos no .env local: MS_TENANT_ID, MS_CLIENT_ID (mesmos valores
-// do app registration usado pelo jira-live), SUPABASE_URL,
-// SUPABASE_SERVICE_ROLE_KEY (pegar no painel do Supabase, projeto
-// nuvrdppxecbowxopbqcr, em Project Settings > API > service_role — NUNCA
-// commitar esse valor).
+// Pré-requisitos em .env.local (NUNCA em .env, que é versionado no git):
+// MS_TENANT_ID, MS_CLIENT_ID (mesmos valores do app registration usado pelo
+// jira-live), SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (pegar no painel do
+// Supabase, projeto nuvrdppxecbowxopbqcr, em Project Settings > API >
+// service_role — NUNCA commitar esse valor).
 import { createClient } from "@supabase/supabase-js";
+
+// tsx roda em Node puro e não carrega .env* automaticamente como o Vite
+// faz para o resto do app — sem isso, rodar `npm run ms-graph:auth` sem
+// exportar as variáveis manualmente no shell falharia com "ausente(s)"
+// mesmo com o arquivo preenchido. Silencioso se o arquivo não existir
+// (variáveis já podem vir do ambiente, ex. CI).
+try {
+  process.loadEnvFile(".env.local");
+} catch {
+  // sem .env.local — segue com o que já estiver em process.env
+}
 
 const TENANT_ID = process.env["MS_TENANT_ID"]?.trim();
 const CLIENT_ID = process.env["MS_CLIENT_ID"]?.trim();
@@ -45,7 +56,7 @@ async function main(): Promise<void> {
     ...(!SUPABASE_SERVICE_ROLE_KEY ? ["SUPABASE_SERVICE_ROLE_KEY"] : []),
   ];
   if (missing.length > 0) {
-    console.error(`Variável(is) de ambiente ausente(s) no .env: ${missing.join(", ")}`);
+    console.error(`Variável(is) de ambiente ausente(s) no .env.local: ${missing.join(", ")}`);
     process.exit(1);
   }
 
