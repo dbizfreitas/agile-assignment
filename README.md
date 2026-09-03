@@ -51,9 +51,30 @@ JavaScript servido a qualquer visitante do site. A proteção dos dados vem de
 RLS no Supabase, não do sigilo desses valores.
 
 **Nunca coloque em `.env`:** `SUPABASE_SERVICE_ROLE_KEY` (bypassa RLS por
-completo), `MS_TENANT_ID`, `MS_CLIENT_ID`, tokens ou qualquer credencial.
-Esses vão em `.env.local`, que é gitignored e tem precedência sobre o `.env`
-no Vite.
+completo), `MS_TENANT_ID`, `MS_CLIENT_ID`, `JIRA_API_TOKEN`, ou qualquer
+credencial. Esses vão em `.env.local`, que é gitignored e tem precedência
+sobre o `.env` no Vite.
+
+#### Segredos de runtime (servidor)
+
+Estas variáveis são lidas no servidor via `process.env` e **não são supridas
+pelo `.env` versionado** — ele só carrega valores públicos. Sem elas o app
+sobe normalmente, mas o recurso correspondente fica indisponível:
+
+| Variável | Recurso afetado sem ela | Onde configurar |
+|---|---|---|
+| `JIRA_EMAIL` + `JIRA_API_TOKEN` | Abas Compromisso e Cycle Time: *"Credenciais do Jira não configuradas no servidor"* | `.env.local` (local) e painel do Lovable (produção) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Rotas administrativas | idem |
+| `MS_TENANT_ID` + `MS_CLIENT_ID` | Fotos da roleta de Retrospectivas (cai no fallback de iniciais) | idem |
+
+Para o **preview publicado**, configure-as no painel do Lovable em
+Project Settings → Environment Variables. Elas não podem vir do git: o
+`.env` versionado é público, e o Lovable só enxerga o que está no repositório.
+
+O `JIRA_API_TOKEN` é gerado em
+[id.atlassian.com → Security → API tokens](https://id.atlassian.com/manage-profile/security/api-tokens).
+O `JIRA_BASE_URL` tem default `https://way2agile.atlassian.net` e só precisa
+ser definido se for outro.
 
 ## Migrations e setup pós-deploy pendentes
 
