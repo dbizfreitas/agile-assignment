@@ -960,10 +960,11 @@ export const getParticipantPhoto = createServerFn({ method: "GET" })
 // service role. Depois disso o app em produção só faz refresh automático
 // (src/integrations/ms-graph/token.server.ts).
 //
-// Pré-requisitos no .env local: MS_TENANT_ID, MS_CLIENT_ID (mesmos valores
-// do app registration usado pelo jira-live), SUPABASE_URL,
-// SUPABASE_SERVICE_ROLE_KEY (pegar no painel do Supabase, projeto
-// nuvrdppxecbowxopbqcr, em Project Settings > API > service_role — NUNCA
+// Pré-requisitos no .env.local (NÃO em .env — esse é versionado no git):
+// MS_TENANT_ID, MS_CLIENT_ID (mesmos valores do app registration usado pelo
+// jira-live), SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (pegar no painel do
+// Supabase, projeto nuvrdppxecbowxopbqcr, em Project Settings > API >
+// service_role — NUNCA
 // commitar esse valor).
 import { createClient } from "@supabase/supabase-js";
 
@@ -1109,7 +1110,7 @@ Nota: este `npm install` cria/atualiza `package-lock.json` no worktree, ainda qu
 - [ ] **Step 6: Pedir ao usuário para rodar a autorização**
 
 Instruir o usuário a:
-1. Adicionar ao `.env` local: `MS_TENANT_ID` e `MS_CLIENT_ID` (mesmos valores usados pelo `jira-live`, em `server/routes/photos.ts` — hoje `cdc5aeea-15c5-4db6-b079-fcadd2505dc2` e `d3590ed6-52b3-4102-aeff-aad2292ab01c` como default, confirmar se são os que devem ser usados aqui também), e `SUPABASE_SERVICE_ROLE_KEY` (painel do Supabase, projeto `nuvrdppxecbowxopbqcr` → Project Settings → API → service_role).
+1. Adicionar a um `.env.local` (criar se não existir — **nunca** em `.env`, que é versionado no git): `MS_TENANT_ID` e `MS_CLIENT_ID` (mesmos valores usados pelo `jira-live`, em `server/routes/photos.ts` — hoje `cdc5aeea-15c5-4db6-b079-fcadd2505dc2` e `d3590ed6-52b3-4102-aeff-aad2292ab01c` como default, confirmar se são os que devem ser usados aqui também), e `SUPABASE_SERVICE_ROLE_KEY` (painel do Supabase, projeto `nuvrdppxecbowxopbqcr` → Project Settings → API → service_role).
 2. Rodar `npm run ms-graph:auth`, acessar o link mostrado, digitar o código.
 3. Confirmar a mensagem `✓ Token gravado em public.ms_graph_token.`
 

@@ -16,6 +16,14 @@ dist-ssr
 .nitro
 *.local
 
+# Secrets locais: .env já foi versionado historicamente (contém só valores
+# não sensíveis hoje), mas issue #24 passou a instruir colocar
+# SUPABASE_SERVICE_ROLE_KEY/MS_TENANT_ID/MS_CLIENT_ID em variáveis de
+# ambiente locais — segredo novo não pode ir para um arquivo rastreado.
+# Novo padrão: segredos ficam em .env.local (Vite já dá precedência a ele
+# sobre .env automaticamente), nunca em .env.
+.env
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
