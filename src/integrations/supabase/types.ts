@@ -4,7 +4,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17";
+    PostgrestVersion: "14.5";
   };
   public: {
     Tables: {
@@ -410,7 +410,7 @@ export type Database = {
       };
       delete_platform_user: { Args: { _target: string }; Returns: undefined };
       delete_team: {
-        Args: { _team: string; _target?: string | null };
+        Args: { _target?: string; _team: string };
         Returns: undefined;
       };
       reset_roulette: { Args: Record<PropertyKey, never>; Returns: undefined };
