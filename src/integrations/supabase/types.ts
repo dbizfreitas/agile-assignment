@@ -193,45 +193,6 @@ export type Database = {
         };
         Relationships: [];
       };
-      role_audit_log: {
-        Row: {
-          action: Database["public"]["Enums"]["role_audit_action"];
-          actor_email: string | null;
-          actor_user_id: string | null;
-          created_at: string;
-          id: string;
-          new_role: Database["public"]["Enums"]["app_role"] | null;
-          previous_role: Database["public"]["Enums"]["app_role"] | null;
-          route: Database["public"]["Enums"]["app_route"] | null;
-          target_email: string | null;
-          target_user_id: string | null;
-        };
-        Insert: {
-          action: Database["public"]["Enums"]["role_audit_action"];
-          actor_email?: string | null;
-          actor_user_id?: string | null;
-          created_at?: string;
-          id?: string;
-          new_role?: Database["public"]["Enums"]["app_role"] | null;
-          previous_role?: Database["public"]["Enums"]["app_role"] | null;
-          route?: Database["public"]["Enums"]["app_route"] | null;
-          target_email?: string | null;
-          target_user_id?: string | null;
-        };
-        Update: {
-          action?: Database["public"]["Enums"]["role_audit_action"];
-          actor_email?: string | null;
-          actor_user_id?: string | null;
-          created_at?: string;
-          id?: string;
-          new_role?: Database["public"]["Enums"]["app_role"] | null;
-          previous_role?: Database["public"]["Enums"]["app_role"] | null;
-          route?: Database["public"]["Enums"]["app_route"] | null;
-          target_email?: string | null;
-          target_user_id?: string | null;
-        };
-        Relationships: [];
-      };
       retro_participants: {
         Row: {
           color: string | null;
@@ -286,6 +247,45 @@ export type Database = {
           last_winner_email?: string | null;
           skipped_emails?: string[];
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      role_audit_log: {
+        Row: {
+          action: Database["public"]["Enums"]["role_audit_action"];
+          actor_email: string | null;
+          actor_user_id: string | null;
+          created_at: string;
+          id: string;
+          new_role: Database["public"]["Enums"]["app_role"] | null;
+          previous_role: Database["public"]["Enums"]["app_role"] | null;
+          route: Database["public"]["Enums"]["app_route"] | null;
+          target_email: string | null;
+          target_user_id: string | null;
+        };
+        Insert: {
+          action: Database["public"]["Enums"]["role_audit_action"];
+          actor_email?: string | null;
+          actor_user_id?: string | null;
+          created_at?: string;
+          id?: string;
+          new_role?: Database["public"]["Enums"]["app_role"] | null;
+          previous_role?: Database["public"]["Enums"]["app_role"] | null;
+          route?: Database["public"]["Enums"]["app_route"] | null;
+          target_email?: string | null;
+          target_user_id?: string | null;
+        };
+        Update: {
+          action?: Database["public"]["Enums"]["role_audit_action"];
+          actor_email?: string | null;
+          actor_user_id?: string | null;
+          created_at?: string;
+          id?: string;
+          new_role?: Database["public"]["Enums"]["app_role"] | null;
+          previous_role?: Database["public"]["Enums"]["app_role"] | null;
+          route?: Database["public"]["Enums"]["app_route"] | null;
+          target_email?: string | null;
+          target_user_id?: string | null;
         };
         Relationships: [];
       };
