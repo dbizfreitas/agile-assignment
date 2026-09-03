@@ -1,7 +1,21 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { RetroParticipant } from "./use-retro-participants";
+
+// SQLSTATE customizados das RPCs do sorteio (mesmo padrão de src/lib/admin-errors.ts).
+const ROULETTE_ERROR_MESSAGES: Record<string, string> = {
+  W2001: "Você não tem permissão para esta ação.",
+  W2402: "Todo mundo já foi sorteado ou está marcado como ausente.",
+};
+
+function rouletteErrorMessage(error: unknown): string {
+  const code = (error as { code?: string } | null)?.code;
+  if (code && ROULETTE_ERROR_MESSAGES[code]) return ROULETTE_ERROR_MESSAGES[code];
+  console.error("[retrospectivas]", error);
+  return "Não foi possível concluir a ação.";
+}
 
 // 18 flashes de 80 ms ≈ 1,44 s — os mesmos números do legado. Puramente
 // estético: o vencedor real já foi decidido pelo servidor (spin_roulette)
@@ -93,6 +107,7 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
       if (error) throw error;
     },
     onSuccess: invalidateState,
+    onError: (error) => toast.error(rouletteErrorMessage(error)),
   });
 
   const unskipMutation = useMutation({
@@ -101,6 +116,7 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
       if (error) throw error;
     },
     onSuccess: invalidateState,
+    onError: (error) => toast.error(rouletteErrorMessage(error)),
   });
 
   const unmarkMutation = useMutation({
@@ -109,6 +125,7 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
       if (error) throw error;
     },
     onSuccess: invalidateState,
+    onError: (error) => toast.error(rouletteErrorMessage(error)),
   });
 
   const resetMutation = useMutation({
@@ -117,6 +134,7 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
       if (error) throw error;
     },
     onSuccess: invalidateState,
+    onError: (error) => toast.error(rouletteErrorMessage(error)),
   });
 
   const spin = useCallback(() => {
@@ -152,7 +170,10 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
           }
         }, FLASH_MS);
       },
-      onError: () => setSpinning(false),
+      onError: (error) => {
+        setSpinning(false);
+        toast.error(rouletteErrorMessage(error));
+      },
     });
   }, [available, invalidateState, spinMutation, spinning]);
 
