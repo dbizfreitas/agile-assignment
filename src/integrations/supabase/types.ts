@@ -175,6 +175,87 @@ export type Database = {
         }
         Relationships: []
       }
+      ms_graph_token: {
+        Row: {
+          access_token: string | null
+          expires_at: string | null
+          id: boolean
+          refresh_token: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token?: string | null
+          expires_at?: string | null
+          id?: boolean
+          refresh_token?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string | null
+          expires_at?: string | null
+          id?: boolean
+          refresh_token?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      retro_participants: {
+        Row: {
+          color: string | null
+          created_at: string
+          email: string
+          id: string
+          name: string
+          photo_data_url: string | null
+          photo_fetched_at: string | null
+          sort_order: number
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+          photo_data_url?: string | null
+          photo_fetched_at?: string | null
+          sort_order: number
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          photo_data_url?: string | null
+          photo_fetched_at?: string | null
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      retro_roulette_state: {
+        Row: {
+          drawn_emails: string[]
+          id: boolean
+          last_winner_email: string | null
+          skipped_emails: string[]
+          updated_at: string
+        }
+        Insert: {
+          drawn_emails?: string[]
+          id?: boolean
+          last_winner_email?: string | null
+          skipped_emails?: string[]
+          updated_at?: string
+        }
+        Update: {
+          drawn_emails?: string[]
+          id?: boolean
+          last_winner_email?: string | null
+          skipped_emails?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       role_audit_log: {
         Row: {
           action: Database["public"]["Enums"]["role_audit_action"]
@@ -338,6 +419,7 @@ export type Database = {
         Args: { _target?: string; _team: string }
         Returns: undefined
       }
+      reset_roulette: { Args: never; Returns: undefined }
       set_user_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -352,6 +434,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      skip_participant: { Args: { _email: string }; Returns: undefined }
+      spin_roulette: { Args: never; Returns: string }
+      unmark_participant: { Args: { _email: string }; Returns: undefined }
+      unskip_participant: { Args: { _email: string }; Returns: undefined }
     }
     Enums: {
       allocation_status: "nao_especificada" | "especificada"
