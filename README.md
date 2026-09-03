@@ -25,6 +25,22 @@ npm i
 npm run dev
 ```
 
+Um clone novo precisa de um `.env` na raiz com as credenciais públicas do
+Supabase antes do `npm run dev` funcionar (esse arquivo não é mais
+versionado — ver seção abaixo):
+
+```sh
+SUPABASE_PROJECT_ID="<project-id>"
+SUPABASE_PUBLISHABLE_KEY="<publishable-key>"
+SUPABASE_URL="<project-url>"
+VITE_SUPABASE_PROJECT_ID="<project-id>"
+VITE_SUPABASE_PUBLISHABLE_KEY="<publishable-key>"
+VITE_SUPABASE_URL="<project-url>"
+```
+
+Pegue os três valores no painel do Supabase, projeto `nuvrdppxecbowxopbqcr`,
+em Project Settings → API (Project ID, `anon`/publishable key, Project URL).
+
 ## Migrations e setup pós-deploy pendentes
 
 Mudanças de schema vivem em `supabase/migrations/*.sql` e não são aplicadas
