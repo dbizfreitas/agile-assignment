@@ -1,6 +1,5 @@
 import { Ban, CirclePause, Undo2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getPhoto } from "@/lib/retrospectivas/photos";
 import {
   avatarColor,
   firstName,
@@ -14,6 +13,7 @@ import { cn } from "@/lib/utils";
 export type ParticipantCardProps = {
   participant: Participant;
   index: number;
+  photoUrl: string | undefined;
   drawn: boolean;
   skipped: boolean;
   highlighted: boolean;
@@ -33,6 +33,7 @@ const OVERLAY_BUTTON =
 export function ParticipantCard({
   participant,
   index,
+  photoUrl,
   drawn,
   skipped,
   highlighted,
@@ -56,10 +57,7 @@ export function ParticipantCard({
       )}
     >
       <Avatar className="size-12">
-        {/* Sem cache de fotos, src é undefined e o Radix cai direto no fallback —
-            que também cobre "a imagem falhou ao carregar", caso que o legado não
-            cobria. É o que elimina o makeAvatarSvg com btoa. */}
-        <AvatarImage src={getPhoto(participant.email)} alt="" />
+        <AvatarImage src={photoUrl} alt="" />
         <AvatarFallback
           style={{ backgroundColor: color }}
           className="text-sm font-semibold text-white"
