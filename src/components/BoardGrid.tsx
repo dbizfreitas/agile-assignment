@@ -19,6 +19,7 @@ import {
   formatRange,
   getSprintYear,
   isDevAvailableInSprint,
+  resolveNextSprint,
   sanitizeTickets,
   statusInfo,
   tipoInfo,
@@ -144,22 +145,6 @@ export function BoardGrid({
     },
   });
 
-  // Sem mudança no payload: o projeto do cartão é recalculado pelo trigger a
-  // cada movimento, e allocations_sprint_project_fkey valida o destino.
-  const move = useMutation({
-    mutationFn: async (v: { id: string; sprint_id: string; dev_id: string }) => {
-      const { error } = await supabase
-        .from("allocations")
-        .update({ sprint_id: v.sprint_id, dev_id: v.dev_id })
-        .eq("id", v.id);
-      if (error) throw error;
-    },
-    // Invalida pelo PREFIXO, sem o projeto: derruba o cache do projeto atual e
-    // o dos outros que estiverem em cache, que é o comportamento desejado.
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["board", "allocations"] }),
-    onError: (e: Error) => toast.error(boardErrorMessage(e)),
-  });
-
   const teams = teamsQ.data ?? [];
   const sprints = sprintsQ.data ?? [];
 
@@ -180,6 +165,73 @@ export function BoardGrid({
   );
 
   const allocations = allocQ.data ?? [];
+
+  // Sem mudança no payload: o projeto do cartão é recalculado pelo trigger a
+  // cada movimento, e allocations_sprint_project_fkey valida o destino.
+  const move = useMutation({
+    mutationFn: async (v: { id: string; sprint_id: string; dev_id: string }) => {
+      const { error } = await supabase
+        .from("allocations")
+        .update({ sprint_id: v.sprint_id, dev_id: v.dev_id })
+        .eq("id", v.id);
+      if (error) throw error;
+    },
+    // Invalida pelo PREFIXO, sem o projeto: derruba o cache do projeto atual e
+    // o dos outros que estiverem em cache, que é o comportamento desejado.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["board", "allocations"] }),
+    onError: (e: Error) => toast.error(boardErrorMessage(e)),
+  });
+
+  // Motivo de bloqueio da replicação, ou `null` se pode replicar. Compartilhado
+  // pelos dois gatilhos (ícone de hover e botão do diálogo) — nenhum dos dois
+  // reimplementa esta checagem. Usa `sprints` (lista completa, sem filtro de
+  // ano): a próxima sprint pode cair no ano seguinte.
+  const buildReplicaBlockReason = (allocation: Allocation): string | null => {
+    const nextSprint = resolveNextSprint(sprints, allocation.sprint_id);
+    if (!nextSprint) {
+      const current = sprints.find((s) => s.id === allocation.sprint_id);
+      return `Não há sprint cadastrada depois de ${current?.code ?? "atual"}.`;
+    }
+    const dev = devs.find((d) => d.id === allocation.dev_id);
+    if (dev && !isDevAvailableInSprint(dev, nextSprint)) {
+      return `${dev.name} está fora da janela de disponibilidade em ${nextSprint.code}.`;
+    }
+    return null;
+  };
+
+  // Insere uma cópia do card na próxima sprint sequencial, mesma pessoa.
+  // `jira_project` fica de fora do payload de propósito: o trigger do banco
+  // recalcula a partir de `dev_id`, mesmo contrato do insert em
+  // AllocationDialog. `position` vai para o final da célula de destino —
+  // maior posição já usada ali, mais 1 (ou 0 se a célula estiver vazia).
+  const replicate = useMutation({
+    mutationFn: async (allocation: Allocation) => {
+      const blockReason = buildReplicaBlockReason(allocation);
+      if (blockReason) throw new Error(blockReason);
+      const nextSprint = resolveNextSprint(sprints, allocation.sprint_id)!;
+      const siblingPositions = allocations
+        .filter((a) => a.sprint_id === nextSprint.id && a.dev_id === allocation.dev_id)
+        .map((a) => a.position);
+      const position = siblingPositions.length > 0 ? Math.max(...siblingPositions) + 1 : 0;
+      const { error } = await supabase.from("allocations").insert({
+        sprint_id: nextSprint.id,
+        dev_id: allocation.dev_id,
+        title: allocation.title,
+        tickets: allocation.tickets,
+        status: allocation.status,
+        tipo: allocation.tipo,
+        notes: allocation.notes,
+        position,
+      });
+      if (error) throw error;
+      return nextSprint;
+    },
+    onSuccess: (nextSprint) => {
+      qc.invalidateQueries({ queryKey: ["board", "allocations"] });
+      toast.success(`Replicado em ${nextSprint.code}.`);
+    },
+    onError: (e: Error) => toast.error(boardErrorMessage(e)),
+  });
 
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
   const teamPosition = useMemo(() => new Map(teams.map((t, i) => [t.id, i])), [teams]);
