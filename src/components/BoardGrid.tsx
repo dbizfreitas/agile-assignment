@@ -200,10 +200,13 @@ export function BoardGrid({
   };
 
   // Insere uma cópia do card na próxima sprint sequencial, mesma pessoa.
-  // `jira_project` fica de fora do payload de propósito: o trigger do banco
-  // recalcula a partir de `dev_id`, mesmo contrato do insert em
-  // AllocationDialog. `position` vai para o final da célula de destino —
-  // maior posição já usada ali, mais 1 (ou 0 se a célula estiver vazia).
+  // `jira_project: project` é redundante em runtime — o trigger
+  // `allocations_set_project` recalcula a coluna a partir de `dev_id` antes
+  // do insert — mas a coluna é NOT NULL sem default, então o tipo `Insert`
+  // gerado pelo Supabase exige o campo. Mesmo padrão de AllocationDialog
+  // (linha ~160), que envia `jira_project` pelo mesmo motivo. `position` vai
+  // para o final da célula de destino — maior posição já usada ali, mais 1
+  // (ou 0 se a célula estiver vazia).
   const replicate = useMutation({
     mutationFn: async (allocation: Allocation) => {
       const blockReason = buildReplicaBlockReason(allocation);
@@ -222,6 +225,7 @@ export function BoardGrid({
         tipo: allocation.tipo,
         notes: allocation.notes,
         position,
+        jira_project: project,
       });
       if (error) throw error;
       return nextSprint;
