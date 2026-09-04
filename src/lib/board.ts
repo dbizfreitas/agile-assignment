@@ -212,3 +212,19 @@ export const TEAM_COLORS = [
   "#9333ea",
   "#475569",
 ];
+
+/**
+ * Próxima sprint sequencial após `currentSprintId`, na MESMA ordem que
+ * `sprintsQ` já usa para montar as linhas do quadro (`order("start_date")
+ * .order("position")`). Recebe a lista completa, nunca filtrada por ano — a
+ * próxima sprint pode cair no ano seguinte, e o filtro de ano é só de
+ * visualização (issue #42).
+ *
+ * `null` quando a sprint atual é a última cadastrada, ou quando não é
+ * encontrada na lista (card órfão de uma sprint já excluída).
+ */
+export function resolveNextSprint(sprints: Sprint[], currentSprintId: string): Sprint | null {
+  const index = sprints.findIndex((s) => s.id === currentSprintId);
+  if (index === -1) return null;
+  return sprints[index + 1] ?? null;
+}

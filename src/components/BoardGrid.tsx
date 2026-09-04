@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { CalendarPlus, ExternalLink, Pencil, Plus, Search, UserPlus, Users } from "lucide-react";
+import { CalendarPlus, Copy, ExternalLink, Pencil, Plus, Search, UserPlus, Users } from "lucide-react";
 import {
   accentClassFor,
   chipClassFor,
@@ -19,6 +19,7 @@ import {
   formatRange,
   getSprintYear,
   isDevAvailableInSprint,
+  resolveNextSprint,
   sanitizeTickets,
   statusInfo,
   tipoInfo,
@@ -144,22 +145,6 @@ export function BoardGrid({
     },
   });
 
-  // Sem mudança no payload: o projeto do cartão é recalculado pelo trigger a
-  // cada movimento, e allocations_sprint_project_fkey valida o destino.
-  const move = useMutation({
-    mutationFn: async (v: { id: string; sprint_id: string; dev_id: string }) => {
-      const { error } = await supabase
-        .from("allocations")
-        .update({ sprint_id: v.sprint_id, dev_id: v.dev_id })
-        .eq("id", v.id);
-      if (error) throw error;
-    },
-    // Invalida pelo PREFIXO, sem o projeto: derruba o cache do projeto atual e
-    // o dos outros que estiverem em cache, que é o comportamento desejado.
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["board", "allocations"] }),
-    onError: (e: Error) => toast.error(boardErrorMessage(e)),
-  });
-
   const teams = teamsQ.data ?? [];
   const sprints = sprintsQ.data ?? [];
 
@@ -180,6 +165,77 @@ export function BoardGrid({
   );
 
   const allocations = allocQ.data ?? [];
+
+  // Sem mudança no payload: o projeto do cartão é recalculado pelo trigger a
+  // cada movimento, e allocations_sprint_project_fkey valida o destino.
+  const move = useMutation({
+    mutationFn: async (v: { id: string; sprint_id: string; dev_id: string }) => {
+      const { error } = await supabase
+        .from("allocations")
+        .update({ sprint_id: v.sprint_id, dev_id: v.dev_id })
+        .eq("id", v.id);
+      if (error) throw error;
+    },
+    // Invalida pelo PREFIXO, sem o projeto: derruba o cache do projeto atual e
+    // o dos outros que estiverem em cache, que é o comportamento desejado.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["board", "allocations"] }),
+    onError: (e: Error) => toast.error(boardErrorMessage(e)),
+  });
+
+  // Motivo de bloqueio da replicação, ou `null` se pode replicar. Compartilhado
+  // pelos dois gatilhos (ícone de hover e botão do diálogo) — nenhum dos dois
+  // reimplementa esta checagem. Usa `sprints` (lista completa, sem filtro de
+  // ano): a próxima sprint pode cair no ano seguinte.
+  const buildReplicaBlockReason = (allocation: Allocation): string | null => {
+    const nextSprint = resolveNextSprint(sprints, allocation.sprint_id);
+    if (!nextSprint) {
+      const current = sprints.find((s) => s.id === allocation.sprint_id);
+      return `Não há sprint cadastrada depois de ${current?.code ?? "desta sprint"}.`;
+    }
+    const dev = devs.find((d) => d.id === allocation.dev_id);
+    if (dev && !isDevAvailableInSprint(dev, nextSprint)) {
+      return `${dev.name} está fora da janela de disponibilidade em ${nextSprint.code}.`;
+    }
+    return null;
+  };
+
+  // Insere uma cópia do card na próxima sprint sequencial, mesma pessoa.
+  // `jira_project: project` é redundante em runtime — o trigger
+  // `allocations_set_project` recalcula a coluna a partir de `dev_id` antes
+  // do insert — mas a coluna é NOT NULL sem default, então o tipo `Insert`
+  // gerado pelo Supabase exige o campo. Mesmo padrão de AllocationDialog
+  // (linha ~160), que envia `jira_project` pelo mesmo motivo. `position` vai
+  // para o final da célula de destino — maior posição já usada ali, mais 1
+  // (ou 0 se a célula estiver vazia).
+  const replicate = useMutation({
+    mutationFn: async (allocation: Allocation) => {
+      const blockReason = buildReplicaBlockReason(allocation);
+      if (blockReason) throw new Error(blockReason);
+      const nextSprint = resolveNextSprint(sprints, allocation.sprint_id)!;
+      const siblingPositions = allocations
+        .filter((a) => a.sprint_id === nextSprint.id && a.dev_id === allocation.dev_id)
+        .map((a) => a.position);
+      const position = siblingPositions.length > 0 ? Math.max(...siblingPositions) + 1 : 0;
+      const { error } = await supabase.from("allocations").insert({
+        sprint_id: nextSprint.id,
+        dev_id: allocation.dev_id,
+        title: allocation.title,
+        tickets: allocation.tickets,
+        status: allocation.status,
+        tipo: allocation.tipo,
+        notes: allocation.notes,
+        position,
+        jira_project: project,
+      });
+      if (error) throw error;
+      return nextSprint;
+    },
+    onSuccess: (nextSprint) => {
+      qc.invalidateQueries({ queryKey: ["board", "allocations"] });
+      toast.success(`Replicado em ${nextSprint.code}.`);
+    },
+    onError: (e: Error) => toast.error(boardErrorMessage(e)),
+  });
 
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
   const teamPosition = useMemo(() => new Map(teams.map((t, i) => [t.id, i])), [teams]);
@@ -427,6 +483,15 @@ export function BoardGrid({
                       if (!canEdit) return;
                       setDraft(toDraft(a));
                     }}
+                    onReplicate={(a) => {
+                      if (!canEdit) return;
+                      const blockReason = buildReplicaBlockReason(a);
+                      if (blockReason) {
+                        toast.error(blockReason);
+                        return;
+                      }
+                      replicate.mutate(a);
+                    }}
                     onDrop={(id, devId) => {
                       if (!canEdit) return;
                       move.mutate({ id, sprint_id: s.id, dev_id: devId });
@@ -445,6 +510,23 @@ export function BoardGrid({
           draft={draft}
           project={project}
           onOpenChange={(o) => !o && setDraft(null)}
+          onReplicate={
+            draft?.id
+              ? () => {
+                  const allocation = allocations.find((a) => a.id === draft.id);
+                  if (allocation) replicate.mutate(allocation);
+                }
+              : undefined
+          }
+          replicateBlockReason={
+            draft?.id
+              ? (() => {
+                  const allocation = allocations.find((a) => a.id === draft.id);
+                  return allocation ? buildReplicaBlockReason(allocation) : null;
+                })()
+              : undefined
+          }
+          isReplicating={replicate.isPending}
         />
         <DevDialog
           dev={devDialog.dev}
@@ -477,6 +559,7 @@ function SprintRow({
   onEditSprint,
   onAdd,
   onEdit,
+  onReplicate,
   onDrop,
 }: {
   sprint: Sprint;
@@ -489,6 +572,7 @@ function SprintRow({
   onEditSprint: () => void;
   onAdd: (devId: string) => void;
   onEdit: (a: Allocation) => void;
+  onReplicate: (a: Allocation) => void;
   onDrop: (allocationId: string, devId: string) => void;
 }) {
   return (
@@ -550,6 +634,7 @@ function SprintRow({
                   allowWrap={items.length === 1}
                   canEdit={canEdit}
                   onEdit={() => onEdit(a)}
+                  onReplicate={() => onReplicate(a)}
                 />
               ))}
             </div>
@@ -607,12 +692,14 @@ function AllocationChip({
   allowWrap,
   canEdit,
   onEdit,
+  onReplicate,
 }: {
   allocation: Allocation;
   dimmed: boolean;
   allowWrap: boolean;
   canEdit: boolean;
   onEdit: () => void;
+  onReplicate: () => void;
 }) {
   const chipClass = chipClassFor(allocation);
   const washClass = washClassFor(allocation);
@@ -620,16 +707,34 @@ function AllocationChip({
   return (
     <HoverCard openDelay={300}>
       <HoverCardTrigger asChild>
+        {/* group/chip: escopo próprio de hover, para não conflitar com
+            group/cell (o "+ demanda" da célula) nem acender o ícone de outro
+            card na mesma célula. */}
         <div
           draggable={canEdit}
           onDragStart={(e) => e.dataTransfer.setData("text/allocation", allocation.id)}
           onClick={onEdit}
-          className={`shrink-0 overflow-hidden rounded-md border-l-[3px] px-2 py-1.5 text-left text-foreground shadow-card transition-opacity ${
+          className={`group/chip relative shrink-0 overflow-hidden rounded-md border-l-[3px] px-2 py-1.5 text-left text-foreground shadow-card transition-opacity ${
             canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-default"
           } ${washClass} ${accentClass} ${dimmed ? "opacity-25" : ""}`}
         >
+          {canEdit ? (
+            <button
+              onClick={(e) => {
+                // Sem isto, o clique no ícone também dispara o onClick do
+                // card (linha acima) e abre o AllocationDialog junto.
+                e.stopPropagation();
+                onReplicate();
+              }}
+              title="Replicar na próxima sprint"
+              aria-label="Replicar na próxima sprint"
+              className="absolute right-1 top-1 z-10 rounded p-0.5 text-foreground/60 opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover/chip:opacity-100"
+            >
+              <Copy className="size-3" />
+            </button>
+          ) : null}
           <p
-            className={`text-xs font-medium leading-snug ${allowWrap ? "line-clamp-4" : "truncate"}`}
+            className={`text-xs font-medium leading-snug ${allowWrap ? "line-clamp-4" : "truncate"} ${canEdit ? "pr-4" : ""}`}
           >
             {allocation.title}
           </p>
