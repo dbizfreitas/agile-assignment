@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Copy, Plus, Trash2 } from "lucide-react";
 import {
   STATUS_LIST,
   TIPO_LIST,
@@ -31,6 +31,7 @@ import {
 } from "@/lib/board";
 import type { JiraProjectKey } from "@/lib/projects";
 import { extractJiraKey, jiraUrlFor, parseTicketTokens } from "@/lib/tickets";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export type AllocationDraft = {
   id?: string;
@@ -47,11 +48,21 @@ export function AllocationDialog({
   draft,
   project,
   onOpenChange,
+  onReplicate,
+  replicateBlockReason,
+  isReplicating,
 }: {
   draft: AllocationDraft | null;
   /** Obrigatório no insert; o cartão nasce no projeto da tela. */
   project: JiraProjectKey;
   onOpenChange: (open: boolean) => void;
+  /** Ausente (undefined) quando `draft` é um card novo, ainda sem `id`. */
+  onReplicate?: (() => void) | undefined;
+  /** Motivo do bloqueio vindo do BoardGrid (sem sprint seguinte, ou pessoa
+   *  fora da janela de disponibilidade no destino). `null` quando pode
+   *  replicar; `undefined` quando não se aplica (card novo). */
+  replicateBlockReason?: string | null | undefined;
+  isReplicating?: boolean | undefined;
 }) {
   const qc = useQueryClient();
   const [title, setTitle] = useState("");
@@ -166,6 +177,26 @@ export function AllocationDialog({
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  // Formulário "sujo" = estado local diverge do draft do banco, usando a
+  // MESMA normalização do payload de `save` (trim, uppercase na key, url
+  // vazia -> null) — sem isso, espaço digitado e apagado marcaria sujo à toa.
+  const normalizedTickets = (list: AllocationTicket[]) =>
+    list
+      .filter((t) => t.key.trim() || t.url?.trim())
+      .map((t) => ({ key: t.key.trim().toUpperCase(), url: t.url?.trim() || null }));
+
+  const isDirty = (() => {
+    if (!draft) return false;
+    if (title.trim() !== (draft.title ?? "").trim()) return true;
+    if (status !== (draft.status ?? "nao_especificada")) return true;
+    if (tipo !== (draft.tipo ?? "planejado")) return true;
+    if ((notes.trim() || null) !== (draft.notes ?? null)) return true;
+    const a = normalizedTickets(tickets);
+    const b = normalizedTickets(draft.tickets ?? []);
+    if (a.length !== b.length) return true;
+    return a.some((t, i) => t.key !== b[i]!.key || t.url !== b[i]!.url);
+  })();
 
   const remove = useMutation({
     mutationFn: async () => {
@@ -304,7 +335,29 @@ export function AllocationDialog({
           ) : (
             <span />
           )}
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            {draft?.id && onReplicate ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* span: Button desabilitado não dispara eventos de hover,
+                      o Tooltip precisa de um wrapper que sempre recebe o mouse. */}
+                  <span tabIndex={isDirty || replicateBlockReason ? 0 : -1}>
+                    <Button
+                      variant="outline"
+                      onClick={onReplicate}
+                      disabled={isDirty || !!replicateBlockReason || isReplicating}
+                    >
+                      <Copy className="size-4" /> Replicar na próxima sprint
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {isDirty || replicateBlockReason ? (
+                  <TooltipContent>
+                    {isDirty ? "Salve as alterações antes de replicar." : replicateBlockReason}
+                  </TooltipContent>
+                ) : null}
+              </Tooltip>
+            ) : null}
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>

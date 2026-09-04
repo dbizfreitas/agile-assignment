@@ -510,6 +510,23 @@ export function BoardGrid({
           draft={draft}
           project={project}
           onOpenChange={(o) => !o && setDraft(null)}
+          onReplicate={
+            draft?.id
+              ? () => {
+                  const allocation = allocations.find((a) => a.id === draft.id);
+                  if (allocation) replicate.mutate(allocation);
+                }
+              : undefined
+          }
+          replicateBlockReason={
+            draft?.id
+              ? (() => {
+                  const allocation = allocations.find((a) => a.id === draft.id);
+                  return allocation ? buildReplicaBlockReason(allocation) : null;
+                })()
+              : undefined
+          }
+          isReplicating={replicate.isPending}
         />
         <DevDialog
           dev={devDialog.dev}
