@@ -190,7 +190,7 @@ export function BoardGrid({
     const nextSprint = resolveNextSprint(sprints, allocation.sprint_id);
     if (!nextSprint) {
       const current = sprints.find((s) => s.id === allocation.sprint_id);
-      return `Não há sprint cadastrada depois de ${current?.code ?? "atual"}.`;
+      return `Não há sprint cadastrada depois de ${current?.code ?? "desta sprint"}.`;
     }
     const dev = devs.find((d) => d.id === allocation.dev_id);
     if (dev && !isDevAvailableInSprint(dev, nextSprint)) {

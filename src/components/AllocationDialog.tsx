@@ -337,19 +337,30 @@ export function AllocationDialog({
           )}
           <div className="flex items-center gap-2">
             {draft?.id && onReplicate ? (
+              // Salvar fecha o diálogo (`save.onSuccess` chama `onOpenChange(false)`,
+              // pré-existente) — então "editar, salvar, replicar" exige reabrir o
+              // card depois de salvar; não há "salvar e o botão liberar no mesmo
+              // diálogo". Atrito aceito: a issue já descarta "salvar e replicar
+              // num gesto" de propósito.
               <Tooltip>
                 <TooltipTrigger asChild>
-                  {/* span: Button desabilitado não dispara eventos de hover,
-                      o Tooltip precisa de um wrapper que sempre recebe o mouse. */}
-                  <span tabIndex={isDirty || replicateBlockReason ? 0 : -1}>
-                    <Button
-                      variant="outline"
-                      onClick={onReplicate}
-                      disabled={isDirty || !!replicateBlockReason || isReplicating}
-                    >
-                      <Copy className="size-4" /> Replicar na próxima sprint
-                    </Button>
-                  </span>
+                  {/* aria-disabled (não `disabled`): um botão `disabled` sai da
+                      árvore de foco e não recebe hover/tab, então o motivo do
+                      bloqueio — que a issue exige "visível" — ficaria
+                      inalcançável por teclado. Com aria-disabled o botão
+                      continua focável e tooltip-able; o clique é barrado no
+                      próprio handler. */}
+                  <Button
+                    variant="outline"
+                    className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                    aria-disabled={isDirty || !!replicateBlockReason || isReplicating}
+                    onClick={() => {
+                      if (isDirty || replicateBlockReason || isReplicating) return;
+                      onReplicate();
+                    }}
+                  >
+                    <Copy className="size-4" /> Replicar na próxima sprint
+                  </Button>
                 </TooltipTrigger>
                 {isDirty || replicateBlockReason ? (
                   <TooltipContent>
