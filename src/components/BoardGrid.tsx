@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { CalendarPlus, ExternalLink, Pencil, Plus, Search, UserPlus, Users } from "lucide-react";
+import { CalendarPlus, Copy, ExternalLink, Pencil, Plus, Search, UserPlus, Users } from "lucide-react";
 import {
   accentClassFor,
   chipClassFor,
@@ -483,6 +483,15 @@ export function BoardGrid({
                       if (!canEdit) return;
                       setDraft(toDraft(a));
                     }}
+                    onReplicate={(a) => {
+                      if (!canEdit) return;
+                      const blockReason = buildReplicaBlockReason(a);
+                      if (blockReason) {
+                        toast.error(blockReason);
+                        return;
+                      }
+                      replicate.mutate(a);
+                    }}
                     onDrop={(id, devId) => {
                       if (!canEdit) return;
                       move.mutate({ id, sprint_id: s.id, dev_id: devId });
@@ -533,6 +542,7 @@ function SprintRow({
   onEditSprint,
   onAdd,
   onEdit,
+  onReplicate,
   onDrop,
 }: {
   sprint: Sprint;
@@ -545,6 +555,7 @@ function SprintRow({
   onEditSprint: () => void;
   onAdd: (devId: string) => void;
   onEdit: (a: Allocation) => void;
+  onReplicate: (a: Allocation) => void;
   onDrop: (allocationId: string, devId: string) => void;
 }) {
   return (
@@ -606,6 +617,7 @@ function SprintRow({
                   allowWrap={items.length === 1}
                   canEdit={canEdit}
                   onEdit={() => onEdit(a)}
+                  onReplicate={() => onReplicate(a)}
                 />
               ))}
             </div>
@@ -663,12 +675,14 @@ function AllocationChip({
   allowWrap,
   canEdit,
   onEdit,
+  onReplicate,
 }: {
   allocation: Allocation;
   dimmed: boolean;
   allowWrap: boolean;
   canEdit: boolean;
   onEdit: () => void;
+  onReplicate: () => void;
 }) {
   const chipClass = chipClassFor(allocation);
   const washClass = washClassFor(allocation);
@@ -676,16 +690,34 @@ function AllocationChip({
   return (
     <HoverCard openDelay={300}>
       <HoverCardTrigger asChild>
+        {/* group/chip: escopo próprio de hover, para não conflitar com
+            group/cell (o "+ demanda" da célula) nem acender o ícone de outro
+            card na mesma célula. */}
         <div
           draggable={canEdit}
           onDragStart={(e) => e.dataTransfer.setData("text/allocation", allocation.id)}
           onClick={onEdit}
-          className={`shrink-0 overflow-hidden rounded-md border-l-[3px] px-2 py-1.5 text-left text-foreground shadow-card transition-opacity ${
+          className={`group/chip relative shrink-0 overflow-hidden rounded-md border-l-[3px] px-2 py-1.5 text-left text-foreground shadow-card transition-opacity ${
             canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-default"
           } ${washClass} ${accentClass} ${dimmed ? "opacity-25" : ""}`}
         >
+          {canEdit ? (
+            <button
+              onClick={(e) => {
+                // Sem isto, o clique no ícone também dispara o onClick do
+                // card (linha acima) e abre o AllocationDialog junto.
+                e.stopPropagation();
+                onReplicate();
+              }}
+              title="Replicar na próxima sprint"
+              aria-label="Replicar na próxima sprint"
+              className="absolute right-1 top-1 z-10 rounded p-0.5 text-foreground/60 opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover/chip:opacity-100"
+            >
+              <Copy className="size-3" />
+            </button>
+          ) : null}
           <p
-            className={`text-xs font-medium leading-snug ${allowWrap ? "line-clamp-4" : "truncate"}`}
+            className={`text-xs font-medium leading-snug ${allowWrap ? "line-clamp-4" : "truncate"} ${canEdit ? "pr-4" : ""}`}
           >
             {allocation.title}
           </p>
