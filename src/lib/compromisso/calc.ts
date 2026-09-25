@@ -8,11 +8,10 @@ import type { IssueResponse } from "./types";
 
 // ── Compromisso da sprint ─────────────────────────────────────────────────────
 // "Compromisso" é a label genérica COMPROMISSO — sem escopo de sprint no nome
-// (o Jira grava, via changelog, o instante em que ela foi declarada). O que
-// evita o vazamento entre sprints (campo Sprint do Jira é cumulativo) é um
-// intervalo de tempo: a issue conta como compromisso da sprint [start, end]
-// quando `commitmentAt` é <= end da sprint E (ainda não concluída OU `doneAt`
-// >= start da sprint).
+// (o Jira grava, via changelog, o instante em que ela foi declarada). A issue
+// conta como compromisso da sprint quando tem a label E está associada à
+// sprint (campo Sprint do Jira) E (ainda não concluída OU `doneAt` >= start
+// da sprint, para não puxar conclusões de uma sprint anterior).
 const COMMIT_LABEL = "compromisso";
 
 const normLabel = (s: string | null | undefined) =>
@@ -59,7 +58,6 @@ function makeIsCommitmentIssue(sprintStart?: string, sprintEnd?: string | null) 
     if (!labelsOf(issue).includes(COMMIT_LABEL)) return false;
     const committedAt = issue?.commitmentAt;
     if (!committedAt) return false;
-    if (sprintEnd && new Date(committedAt).getTime() > new Date(sprintEnd).getTime()) return false;
     if (issue?.statusCategory === "done") {
       const d = doneDateOf(issue);
       if (sprintStart && d && new Date(d).getTime() < new Date(sprintStart).getTime()) return false;
