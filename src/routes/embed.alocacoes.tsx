@@ -5,6 +5,7 @@ import { AccessDenied } from "@/components/AccessDenied";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthorizedSession } from "@/hooks/use-authorized-session";
+import { parseBoardSearch, type BoardSearch } from "@/lib/board-search";
 import { JIRA_PROJECTS, isJiraProjectKey, type JiraProjectKey } from "@/lib/projects";
 
 const DESCRIPTION =
@@ -15,6 +16,9 @@ const DESCRIPTION =
  * (`_shell`) — logo, sem cabeçalho, sem barra de guias e sem seletor de
  * projeto. O projeto vem da URL (`?project=PIM`), com o mesmo encadeamento de
  * fallback da casca: URL → `localStorage["lastProject"]` → primeiro da lista.
+ *
+ * Ano, busca, tipo e status também vêm da URL (`?ano=`, `?q=`, `?tipo=`,
+ * `?status=`, issue #55), o que permite links fixos por ano/tipo em painéis.
  *
  * `validateSearch` é seguro AQUI porque esta não é rota de layout: o esquema
  * não vaza para rotas irmãs, que foi o problema registrado em `_shell.tsx`.
@@ -39,6 +43,7 @@ export const Route = createFileRoute("/embed/alocacoes")({
       project: isJiraProjectKey(typeof raw === "string" ? raw : null)
         ? (raw as JiraProjectKey)
         : undefined,
+      ...parseBoardSearch(search),
     };
   },
   head: () => ({
@@ -56,8 +61,13 @@ export const Route = createFileRoute("/embed/alocacoes")({
 });
 
 function EmbedAlocacoes() {
-  const { project: fromUrl } = Route.useSearch();
+  const { project: fromUrl, ...filters } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const { session, loading, canEdit, canView, routes } = useAuthorizedSession();
+
+  // `replace`: não polui o histórico; patch com `undefined` remove a chave.
+  const onFiltersChange = (patch: Partial<BoardSearch>) =>
+    navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true });
 
   if (loading) {
     return (
@@ -112,8 +122,14 @@ function EmbedAlocacoes() {
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-background">
       {/* `key={project}`: mesmo motivo da aba /alocacoes — remonta o board e
-          reseta os filtros locais ao trocar de projeto via `?project=`. */}
-      <BoardGrid canEdit={canEdit} project={project} key={project} />
+          reseta diálogos/drag ao trocar de projeto via `?project=`. */}
+      <BoardGrid
+        canEdit={canEdit}
+        project={project}
+        filters={filters}
+        onFiltersChange={onFiltersChange}
+        key={project}
+      />
     </div>
   );
 }

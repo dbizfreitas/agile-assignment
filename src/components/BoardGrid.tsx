@@ -45,6 +45,7 @@ import {
   type Sprint,
   type Team,
 } from "@/lib/board";
+import type { BoardSearch } from "@/lib/board-search";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
@@ -62,6 +63,8 @@ const DEV_COL_MIN_PX = 152;
 export function BoardGrid({
   canEdit,
   project,
+  filters,
+  onFiltersChange,
 }: {
   canEdit: boolean;
   /**
@@ -73,6 +76,15 @@ export function BoardGrid({
    * segundo seletor dentro do quadro é exatamente o que esta frente desfaz.
    */
   project: JiraProjectKey;
+  /**
+   * Ano, busca, tipo e status vivem na URL (issue #55); a rota é dona do
+   * estado e o board só o lê. Chave ausente = padrão.
+   *
+   * `onFiltersChange` recebe um patch parcial: valor padrão ("todos", busca
+   * vazia) vai como `undefined`, o que remove a chave da URL.
+   */
+  filters: BoardSearch;
+  onFiltersChange: (patch: Partial<BoardSearch>) => void;
 }) {
   const qc = useQueryClient();
   const [draft, setDraft] = useState<AllocationDraft | null>(null);
@@ -85,14 +97,13 @@ export function BoardGrid({
     sprint: null,
   });
   const [teamsDialog, setTeamsDialog] = useState(false);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<AllocationStatus | "todos">("todos");
-  const [tipoFilter, setTipoFilter] = useState<AllocationTipo | "todos">("todos");
   const [dragOver, setDragOver] = useState<string | null>(null);
-  // Ano corrente do relógio, não o da sprint mais próxima — decisão da spec.
-  // Filtro local, sem persistência: reseta a cada carregamento, igual aos
-  // filtros de busca/status/tipo já existentes neste componente.
-  const [yearFilter, setYearFilter] = useState<number>(() => new Date().getFullYear());
+  // Filtros derivados da URL. Sem `ano`, vale o ano corrente do relógio, não o
+  // da sprint mais próxima — decisão da spec.
+  const search = filters.q ?? "";
+  const statusFilter: AllocationStatus | "todos" = filters.status ?? "todos";
+  const tipoFilter: AllocationTipo | "todos" = filters.tipo ?? "todos";
+  const yearFilter = filters.ano ?? new Date().getFullYear();
 
   // As quatro queries são `select("*")` planas com um `.eq("jira_project", …)`
   // cada — sem `!inner`, sem query dependente: `devs` e `allocations` têm o
@@ -337,7 +348,7 @@ export function BoardGrid({
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => onFiltersChange({ q: e.target.value || undefined })}
                 placeholder="Buscar demanda ou ticket"
                 className="h-9 w-56 pl-8"
               />
@@ -373,7 +384,10 @@ export function BoardGrid({
                 visualização, não de edição, e vale para leitor e editor. */}
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-medium text-muted-foreground">Ano</span>
-              <Select value={String(yearFilter)} onValueChange={(v) => setYearFilter(Number(v))}>
+              <Select
+                value={String(yearFilter)}
+                onValueChange={(v) => onFiltersChange({ ano: Number(v) })}
+              >
                 <SelectTrigger className="h-9 w-24" aria-label="Ano">
                   <SelectValue />
                 </SelectTrigger>
@@ -392,14 +406,17 @@ export function BoardGrid({
             <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               Tipo
             </span>
-            <FilterChip active={tipoFilter === "todos"} onClick={() => setTipoFilter("todos")}>
+            <FilterChip
+              active={tipoFilter === "todos"}
+              onClick={() => onFiltersChange({ tipo: undefined })}
+            >
               Todos
             </FilterChip>
             {TIPO_LIST.map((t) => (
               <FilterChip
                 key={t.value}
                 active={tipoFilter === t.value}
-                onClick={() => setTipoFilter(t.value)}
+                onClick={() => onFiltersChange({ tipo: t.value })}
               >
                 <span className={`size-2 rounded-full ${t.dot}`} />
                 {t.label}
@@ -411,14 +428,17 @@ export function BoardGrid({
             <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               Status
             </span>
-            <FilterChip active={statusFilter === "todos"} onClick={() => setStatusFilter("todos")}>
+            <FilterChip
+              active={statusFilter === "todos"}
+              onClick={() => onFiltersChange({ status: undefined })}
+            >
               Todos
             </FilterChip>
             {STATUS_LIST.map((s) => (
               <FilterChip
                 key={s.value}
                 active={statusFilter === s.value}
-                onClick={() => setStatusFilter(s.value)}
+                onClick={() => onFiltersChange({ status: s.value })}
               >
                 <span className={`size-2 rounded-full ${s.dot}`} />
                 {s.label}
