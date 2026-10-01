@@ -112,6 +112,12 @@ export function boardErrorMessage(error: unknown, context?: BoardErrorContext): 
     return "Já existe uma sprint com este código neste projeto.";
   }
 
+  // Link do ticket (issue #51). O AllocationDialog barra antes de salvar;
+  // isto cobre cliente desatualizado.
+  if (code === "23514" && haystack.includes("allocations_ticket_urls_valid")) {
+    return "Link de ticket inválido. Use um único link começando com http:// ou https://.";
+  }
+
   if (code === "23514" && haystack.includes("_jira_project_format")) {
     return "Chave de projeto inválida.";
   }
