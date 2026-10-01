@@ -41,7 +41,7 @@ import {
 } from "@/lib/board";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
-import { extractJiraKey, jiraUrlFor, parseTicketTokens } from "@/lib/tickets";
+import { extractJiraKey, jiraUrlFor, parseTicketTokens, ticketKeyMismatch } from "@/lib/tickets";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export type AllocationDraft = {
@@ -120,6 +120,8 @@ export function AllocationDialog({
   // derivação automática para de mexer naquele campo (evita sobrescrever
   // edição manual, mas continua recalculando enquanto for só o auto-preenchido
   // de antes — corrige o link "congelar" na 1ª tecla digitada na chave).
+  // Quando os dois lados já foram editados e divergem, o aviso inline
+  // (`ticketKeyMismatch`, issue #50) é que aponta o problema.
   const handleTicketKeyChange = (index: number, value: string) =>
     setTickets((prev) =>
       prev.map((t, i) => {
@@ -140,6 +142,11 @@ export function AllocationDialog({
         return { key, url: value };
       }),
     );
+
+  // Correções em um clique do aviso de divergência (issue #50). Cada uma
+  // alinha um lado ao outro; a derivação automática acima não entra aqui.
+  const setTicketAt = (index: number, ticket: AllocationTicket) =>
+    setTickets((prev) => prev.map((t, i) => (i === index ? ticket : t)));
 
   /** Cola vários links/chaves Jira de uma vez (um por linha, espaço ou vírgula) e expande em linhas. */
   const handleTicketPaste = (
@@ -308,34 +315,63 @@ export function AllocationDialog({
                   aqui dentro, sem esticar o diálogo inteiro. Auto-rola para o
                   fim ao adicionar linha, para a mais nova ficar sempre visível. */}
                 <div ref={ticketsListRef} className="max-h-32 space-y-2 overflow-y-auto pr-1">
-                  {tickets.map((t, i) => (
-                    <div key={i} className="flex gap-2">
-                      <div className="grid flex-1 grid-cols-2 gap-2">
-                        <Input
-                          value={t.key}
-                          onChange={(e) => handleTicketKeyChange(i, e.target.value)}
-                          onPaste={(e) => handleTicketPaste(i, "key", e)}
-                          placeholder="PIM-7862"
-                          aria-label="Chave do ticket"
-                        />
-                        <Input
-                          value={t.url ?? ""}
-                          onChange={(e) => handleTicketUrlChange(i, e.target.value)}
-                          onPaste={(e) => handleTicketPaste(i, "url", e)}
-                          placeholder="https://..."
-                          aria-label="Link do ticket"
-                        />
+                  {tickets.map((t, i) => {
+                    const linked = ticketKeyMismatch(t);
+                    const typed = t.key.trim().toUpperCase();
+                    return (
+                      <div key={i} className="space-y-1">
+                        <div className="flex gap-2">
+                          <div className="grid flex-1 grid-cols-2 gap-2">
+                            <Input
+                              value={t.key}
+                              onChange={(e) => handleTicketKeyChange(i, e.target.value)}
+                              onPaste={(e) => handleTicketPaste(i, "key", e)}
+                              placeholder="PIM-7862"
+                              aria-label="Chave do ticket"
+                            />
+                            <Input
+                              value={t.url ?? ""}
+                              onChange={(e) => handleTicketUrlChange(i, e.target.value)}
+                              onPaste={(e) => handleTicketPaste(i, "url", e)}
+                              placeholder="https://..."
+                              aria-label="Link do ticket"
+                            />
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground hover:text-destructive"
+                            onClick={() => removeTicketRow(i)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                        {linked ? (
+                          <p className="flex flex-wrap items-center gap-x-2 text-xs text-amber-600 dark:text-amber-400">
+                            <span>
+                              O link aponta para {linked}, não para {typed}.
+                            </span>
+                            <Button
+                              variant="link"
+                              size="sm"
+                              className="h-auto p-0 text-xs"
+                              onClick={() => setTicketAt(i, { key: linked, url: t.url })}
+                            >
+                              Usar {linked}
+                            </Button>
+                            <Button
+                              variant="link"
+                              size="sm"
+                              className="h-auto p-0 text-xs"
+                              onClick={() => setTicketAt(i, { key: typed, url: jiraUrlFor(typed) })}
+                            >
+                              Trocar link para {typed}
+                            </Button>
+                          </p>
+                        ) : null}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-destructive"
-                        onClick={() => removeTicketRow(i)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <Button variant="outline" size="sm" onClick={addTicketRow}>
                   <Plus className="size-3.5" /> Ticket
