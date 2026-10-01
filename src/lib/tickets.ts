@@ -1,10 +1,22 @@
 import type { AllocationTicket } from "@/lib/board";
 import { JIRA_BASE } from "@/lib/jira-base";
 
-const JIRA_KEY_RE = /\b([A-Z][A-Z0-9]+-\d+)\b/;
+const JIRA_KEY_RE = /\b([A-Z][A-Z0-9]+-\d+)\b/; // chave dentro de URL/texto
+// Token solto (issue #52): ancorado. Sem âncora, "foo" virava a chave FOO.
+const JIRA_KEY_EXACT_RE = /^[A-Z][A-Z0-9]+-\d+$/;
 
 export function jiraUrlFor(key: string): string {
   return `${JIRA_BASE}/browse/${key}`;
+}
+
+/** Chave Jira normalizada (trim + maiúsculas) ou `null` se o texto não é uma chave. */
+export function normalizeJiraKey(text: string): string | null {
+  const value = text.trim().toUpperCase();
+  return JIRA_KEY_EXACT_RE.test(value) ? value : null;
+}
+
+export function isJiraUrl(url: string): boolean {
+  return url.trim().toLowerCase().startsWith(JIRA_BASE.toLowerCase());
 }
 
 export function extractJiraKey(text: string): string | null {
@@ -20,9 +32,31 @@ export function extractJiraKey(text: string): string | null {
 export function ticketKeyMismatch(ticket: AllocationTicket): string | null {
   const key = ticket.key.trim().toUpperCase();
   const url = ticket.url?.trim() ?? "";
-  if (!key || !url.toLowerCase().startsWith(JIRA_BASE.toLowerCase())) return null;
+  if (!key || !isJiraUrl(url)) return null;
   const linked = extractJiraKey(url);
   return linked && linked !== key ? linked : null;
+}
+
+export type TicketKeyProblem = "formato";
+
+/**
+ * Chave preenchida que não é uma chave Jira, numa linha cujo link está vazio
+ * ou é do Jira (issue #52). Com link de outro site (DevOps…) a chave é rótulo
+ * livre. Link inválido já é tratado por ticketUrlProblem.
+ */
+export function ticketKeyProblem(ticket: AllocationTicket): TicketKeyProblem | null {
+  if (!ticket.key.trim()) return null;
+  const url = ticket.url?.trim() ?? "";
+  if (url && !isJiraUrl(url)) return null;
+  return normalizeJiraKey(ticket.key) ? null : "formato";
+}
+
+/** Prefixo da chave quando ela é de outro projeto Jira; `null` caso contrário. */
+export function ticketProjectMismatch(ticket: AllocationTicket, project: string): string | null {
+  const key = normalizeJiraKey(ticket.key);
+  if (!key) return null;
+  const prefix = key.slice(0, key.lastIndexOf("-"));
+  return prefix !== project.toUpperCase() ? prefix : null;
 }
 
 // Regra única de link válido (issue #51). A migration
@@ -57,8 +91,10 @@ export function parseTicketToken(token: string): AllocationTicket {
   if (/^https?:\/\//i.test(trimmed)) {
     return { key: extractJiraKey(trimmed) ?? "", url: trimmed };
   }
-  const key = extractJiraKey(trimmed) ?? trimmed.toUpperCase();
-  return { key, url: key ? jiraUrlFor(key) : null };
+  const key = normalizeJiraKey(trimmed);
+  // Texto que não é chave fica na linha como digitado, sem link: o diálogo
+  // marca a linha como inválida (ticketKeyProblem).
+  return key ? { key, url: jiraUrlFor(key) } : { key: trimmed, url: null };
 }
 
 /**

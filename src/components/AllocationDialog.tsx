@@ -45,8 +45,11 @@ import {
   extractJiraKey,
   firstTicketUrl,
   jiraUrlFor,
+  normalizeJiraKey,
   parseTicketTokens,
   ticketKeyMismatch,
+  ticketKeyProblem,
+  ticketProjectMismatch,
   ticketUrlProblem,
 } from "@/lib/tickets";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -133,9 +136,12 @@ export function AllocationDialog({
     setTickets((prev) =>
       prev.map((t, i) => {
         if (i !== index) return t;
+        // Comparação com a chave antiga sem validar: cobre link legado /browse/FOO.
         const wasAutoDerived = !t.url || t.url === jiraUrlFor(t.key.trim().toUpperCase());
-        const url = wasAutoDerived && value.trim() ? jiraUrlFor(value.trim().toUpperCase()) : t.url;
-        return { key: value, url };
+        if (!wasAutoDerived || !value.trim()) return { key: value, url: t.url };
+        // Só chave válida gera link (issue #52); texto qualquer fica sem link.
+        const next = normalizeJiraKey(value);
+        return { key: value, url: next ? jiraUrlFor(next) : null };
       }),
     );
 
@@ -191,6 +197,18 @@ export function AllocationDialog({
         `${missingKeys} link(s) colado(s) sem chave Jira reconhecida — preencha manualmente.`,
       );
     }
+    const invalidKeys = parsed.filter((t) => ticketKeyProblem(t) !== null).length;
+    if (invalidKeys > 0) {
+      toast.warning(
+        `${invalidKeys} item(ns) colado(s) não é(são) chave Jira (ex.: ${project}-123) — corrija ou remova a linha.`,
+      );
+    }
+    const fromOther = parsed.filter((t) => ticketProjectMismatch(t, project) !== null).length;
+    if (fromOther > 0) {
+      toast.warning(
+        `${fromOther} ticket(s) colado(s) de outro projeto — confira se são do ${project}.`,
+      );
+    }
     setTickets((prev) => {
       const next = [...prev];
       next.splice(index, 1, ...parsed);
@@ -244,9 +262,11 @@ export function AllocationDialog({
     return a.some((t, i) => t.key !== b[i]!.key || t.url !== b[i]!.url);
   })();
 
-  // Link inválido bloqueia o Salvar (issue #51); o erro aparece na própria
-  // linha. O banco tem a mesma regra no CHECK allocations_ticket_urls_valid.
+  // Link e chave inválidos bloqueiam o Salvar (issues #51 e #52); o erro
+  // aparece na própria linha. Só a regra do link existe no banco (CHECK
+  // allocations_ticket_urls_valid); a da chave é só do cliente.
   const hasTicketUrlProblem = tickets.some((t) => ticketUrlProblem(t.url) !== null);
+  const hasTicketKeyProblem = tickets.some((t) => ticketKeyProblem(t) !== null);
 
   const remove = useMutation({
     mutationFn: async () => {
@@ -332,6 +352,8 @@ export function AllocationDialog({
                     const linked = ticketKeyMismatch(t);
                     const typed = t.key.trim().toUpperCase();
                     const urlProblem = ticketUrlProblem(t.url);
+                    const keyProblem = ticketKeyProblem(t);
+                    const otherProject = ticketProjectMismatch(t, project);
                     return (
                       <div key={i} className="space-y-1">
                         <div className="flex gap-2">
@@ -342,6 +364,7 @@ export function AllocationDialog({
                               onPaste={(e) => handleTicketPaste(i, "key", e)}
                               placeholder="PIM-7862"
                               aria-label="Chave do ticket"
+                              aria-invalid={keyProblem ? true : undefined}
                             />
                             <Input
                               value={t.url ?? ""}
@@ -361,6 +384,17 @@ export function AllocationDialog({
                             <Trash2 className="size-4" />
                           </Button>
                         </div>
+                        {keyProblem ? (
+                          <p className="text-xs text-destructive">
+                            "{t.key.trim()}" não é uma chave Jira (ex.: {project}-123). Corrija a
+                            chave ou remova a linha.
+                          </p>
+                        ) : null}
+                        {otherProject ? (
+                          <p className="text-xs text-amber-600 dark:text-amber-400">
+                            {normalizeJiraKey(t.key)} é do projeto {otherProject}, não do {project}.
+                          </p>
+                        ) : null}
                         {urlProblem === "esquema" ? (
                           <p className="text-xs text-destructive">
                             O link precisa começar com http:// ou https://.
@@ -394,14 +428,18 @@ export function AllocationDialog({
                             >
                               Usar {linked}
                             </Button>
-                            <Button
-                              variant="link"
-                              size="sm"
-                              className="h-auto p-0 text-xs"
-                              onClick={() => setTicketAt(i, { key: typed, url: jiraUrlFor(typed) })}
-                            >
-                              Trocar link para {typed}
-                            </Button>
+                            {normalizeJiraKey(typed) ? (
+                              <Button
+                                variant="link"
+                                size="sm"
+                                className="h-auto p-0 text-xs"
+                                onClick={() =>
+                                  setTicketAt(i, { key: typed, url: jiraUrlFor(typed) })
+                                }
+                              >
+                                Trocar link para {typed}
+                              </Button>
+                            ) : null}
                           </p>
                         ) : null}
                       </div>
@@ -478,7 +516,9 @@ export function AllocationDialog({
               </Button>
               <Button
                 onClick={() => save.mutate()}
-                disabled={!title.trim() || hasTicketUrlProblem || save.isPending}
+                disabled={
+                  !title.trim() || hasTicketUrlProblem || hasTicketKeyProblem || save.isPending
+                }
               >
                 Salvar
               </Button>
