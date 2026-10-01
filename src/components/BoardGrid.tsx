@@ -252,7 +252,7 @@ export function BoardGrid({
       // `position` da próxima réplica não é calculada com dados velhos.
       return qc.invalidateQueries({ queryKey: ["board", "allocations"] });
     },
-    onError: (e: Error) => toast.error(boardErrorMessage(e)),
+    onError: (e: Error) => toast.error(boardErrorMessage(e, "allocation")),
   });
 
   // Trava SÍNCRONA contra cliques repetidos: `isPending` não basta, pois o
