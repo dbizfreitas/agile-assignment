@@ -29,6 +29,7 @@ import {
   formatRange,
   getSprintYear,
   isDevAvailableInSprint,
+  normalizeSearchText,
   resolveNextSprint,
   sanitizeTickets,
   statusInfo,
@@ -293,14 +294,14 @@ export function BoardGrid({
     });
   }, [devsQ.data, teamPosition]);
 
-  const term = search.trim().toLowerCase();
+  const term = normalizeSearchText(search);
   const matches = (a: Allocation) => {
     const okStatus = statusFilter === "todos" || a.status === statusFilter;
     const okTipo = tipoFilter === "todos" || a.tipo === tipoFilter;
     const okTerm =
       !term ||
-      a.title.toLowerCase().includes(term) ||
-      a.tickets.some((t) => t.key.toLowerCase().includes(term));
+      normalizeSearchText(a.title).includes(term) ||
+      a.tickets.some((t) => normalizeSearchText(t.key).includes(term));
     return okStatus && okTipo && okTerm;
   };
 
