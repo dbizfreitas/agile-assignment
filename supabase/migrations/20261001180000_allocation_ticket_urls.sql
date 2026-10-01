@@ -6,7 +6,8 @@
 -- src/lib/board-errors.ts.
 --
 -- A regra é a mesma de `ticketUrlProblem` em src/lib/tickets.ts: depois de
--- btrim, casa ^https?://[^[:space:]/?#]+[^[:space:]]*$ e tem um único
+-- btrim de espaço, tab, CR, LF, FF e VT (o mesmo que `trim()` do JS para ASCII),
+-- casa ^https?://[^[:space:]/?#]+[^[:space:]]*$ e tem um único
 -- http(s)://. Link null ou vazio é válido. Se mudar lá, mude aqui.
 --
 -- Ordem de deploy: independente. O cliente novo não depende do CHECK; o
@@ -20,10 +21,10 @@ IMMUTABLE
 SET search_path = ''
 AS $$
   SELECT url IS NULL
-    OR btrim(url) = ''
+    OR btrim(url, E' \t\r\n\f\v') = ''
     OR (
-      btrim(url) ~* '^https?://[^[:space:]/?#]+[^[:space:]]*$'
-      AND btrim(url) !~* '.https?://'
+      btrim(url, E' \t\r\n\f\v') ~* '^https?://[^[:space:]/?#]+[^[:space:]]*$'
+      AND btrim(url, E' \t\r\n\f\v') !~* '.https?://'
     );
 $$;
 
@@ -68,8 +69,8 @@ SET tickets = (
   FROM jsonb_array_elements(a.tickets) WITH ORDINALITY AS e(t, ord)
   CROSS JOIN LATERAL (
     SELECT CASE
-      WHEN btrim(e.t ->> 'url') ~* '^https?://'
-        THEN regexp_replace(btrim(e.t ->> 'url'), '(.)https?://.*$', '\1', 'i')
+      WHEN btrim(e.t ->> 'url', E' \t\r\n\f\v') ~* '^https?://'
+        THEN regexp_replace(btrim(e.t ->> 'url', E' \t\r\n\f\v'), '(.)https?://.*$', '\1', 'i')
     END AS fixed
   ) AS r
 )
