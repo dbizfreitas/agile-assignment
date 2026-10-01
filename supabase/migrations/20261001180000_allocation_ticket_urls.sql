@@ -21,10 +21,10 @@ IMMUTABLE
 SET search_path = ''
 AS $$
   SELECT url IS NULL
-    OR btrim(url, E' \t\r\n\f\v') = ''
+    OR btrim(url, E' \t\r\n\f\x0B') = ''
     OR (
-      btrim(url, E' \t\r\n\f\v') ~* '^https?://[^[:space:]/?#]+[^[:space:]]*$'
-      AND btrim(url, E' \t\r\n\f\v') !~* '.https?://'
+      btrim(url, E' \t\r\n\f\x0B') ~* '^https?://[^[:space:]/?#]+[^[:space:]]*$'
+      AND btrim(url, E' \t\r\n\f\x0B') !~* '.https?://'
     );
 $$;
 
@@ -69,8 +69,11 @@ SET tickets = (
   FROM jsonb_array_elements(a.tickets) WITH ORDINALITY AS e(t, ord)
   CROSS JOIN LATERAL (
     SELECT CASE
-      WHEN btrim(e.t ->> 'url', E' \t\r\n\f\v') ~* '^https?://'
-        THEN regexp_replace(btrim(e.t ->> 'url', E' \t\r\n\f\v'), '(.)https?://.*$', '\1', 'i')
+      WHEN btrim(e.t ->> 'url', E' \t\r\n\f\x0B') ~* '^https?://'
+        THEN btrim(
+          regexp_replace(btrim(e.t ->> 'url', E' \t\r\n\f\x0B'), '(.)https?://.*$', '\1', 'i'),
+          E' \t\r\n\f\x0B'
+        )
     END AS fixed
   ) AS r
 )
