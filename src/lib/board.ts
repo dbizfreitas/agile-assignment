@@ -76,6 +76,20 @@ export function sanitizeTickets(raw: unknown): AllocationTicket[] {
   }));
 }
 
+/**
+ * Normaliza texto para a busca do board: remove acentos (só marcas
+ * combinantes — `^`, `` ` `` e `~` digitados continuam valendo), ignora
+ * maiúsculas e colapsa espaços repetidos.
+ */
+export function normalizeSearchText(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export const STATUS_LIST: {
   value: AllocationStatus;
   label: string;
