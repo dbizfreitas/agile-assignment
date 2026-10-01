@@ -41,7 +41,14 @@ import {
 } from "@/lib/board";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
-import { extractJiraKey, jiraUrlFor, parseTicketTokens, ticketKeyMismatch } from "@/lib/tickets";
+import {
+  extractJiraKey,
+  firstTicketUrl,
+  jiraUrlFor,
+  parseTicketTokens,
+  ticketKeyMismatch,
+  ticketUrlProblem,
+} from "@/lib/tickets";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export type AllocationDraft = {
@@ -152,7 +159,9 @@ export function AllocationDialog({
   const handleTicketPaste = (index: number, e: React.ClipboardEvent<HTMLInputElement>) => {
     const text = e.clipboardData.getData("text");
     const parsed = parseTicketTokens(text);
-    if (parsed.length <= 1) {
+    // Mais de um http(s):// no texto colado nunca vai para o colar nativo,
+    // mesmo que vire uma linha só depois de tirar os repetidos (issue #51).
+    if (parsed.length <= 1 && ticketUrlProblem(text) !== "varios") {
       const [token] = parsed;
       if (token && !token.key && token.url) {
         toast.warning(
@@ -220,6 +229,10 @@ export function AllocationDialog({
     if (a.length !== b.length) return true;
     return a.some((t, i) => t.key !== b[i]!.key || t.url !== b[i]!.url);
   })();
+
+  // Link inválido bloqueia o Salvar (issue #51); o erro aparece na própria
+  // linha. O banco tem a mesma regra no CHECK allocations_ticket_urls_valid.
+  const hasTicketUrlProblem = tickets.some((t) => ticketUrlProblem(t.url) !== null);
 
   const remove = useMutation({
     mutationFn: async () => {
@@ -304,6 +317,7 @@ export function AllocationDialog({
                   {tickets.map((t, i) => {
                     const linked = ticketKeyMismatch(t);
                     const typed = t.key.trim().toUpperCase();
+                    const urlProblem = ticketUrlProblem(t.url);
                     return (
                       <div key={i} className="space-y-1">
                         <div className="flex gap-2">
@@ -321,6 +335,7 @@ export function AllocationDialog({
                               onPaste={(e) => handleTicketPaste(i, e)}
                               placeholder="https://..."
                               aria-label="Link do ticket"
+                              aria-invalid={urlProblem ? true : undefined}
                             />
                           </div>
                           <Button
@@ -332,6 +347,26 @@ export function AllocationDialog({
                             <Trash2 className="size-4" />
                           </Button>
                         </div>
+                        {urlProblem === "esquema" ? (
+                          <p className="text-xs text-destructive">
+                            O link precisa começar com http:// ou https://.
+                          </p>
+                        ) : null}
+                        {urlProblem === "varios" ? (
+                          <p className="flex flex-wrap items-center gap-x-2 text-xs text-destructive">
+                            <span>Há mais de um link neste campo.</span>
+                            <Button
+                              variant="link"
+                              size="sm"
+                              className="h-auto p-0 text-xs"
+                              onClick={() =>
+                                setTicketAt(i, { key: t.key, url: firstTicketUrl(t.url ?? "") })
+                              }
+                            >
+                              Manter só o primeiro
+                            </Button>
+                          </p>
+                        ) : null}
                         {linked ? (
                           <p className="flex flex-wrap items-center gap-x-2 text-xs text-amber-600 dark:text-amber-400">
                             <span>
@@ -427,7 +462,10 @@ export function AllocationDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button onClick={() => save.mutate()} disabled={!title.trim() || save.isPending}>
+              <Button
+                onClick={() => save.mutate()}
+                disabled={!title.trim() || hasTicketUrlProblem || save.isPending}
+              >
                 Salvar
               </Button>
             </div>
