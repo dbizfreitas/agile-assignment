@@ -189,7 +189,7 @@ export function AllocationDialog({
       qc.invalidateQueries({ queryKey: ["board", "allocations"] });
       onOpenChange(false);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(boardErrorMessage(e, "allocation")),
   });
 
   // Formulário "sujo" = estado local diverge do draft do banco, usando a
@@ -223,7 +223,7 @@ export function AllocationDialog({
       setConfirming(false);
       onOpenChange(false);
     },
-    onError: (e: Error) => toast.error(boardErrorMessage(e)),
+    onError: (e: Error) => toast.error(boardErrorMessage(e, "allocation")),
   });
 
   return (

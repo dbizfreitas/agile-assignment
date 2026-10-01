@@ -1,3 +1,5 @@
+import { isNetworkError } from "./network-errors";
+
 // SQLSTATE + nome da restrição -> mensagem pt-BR, para as violações que a
 // dimensão de projeto introduziu. Mesmo padrão de src/lib/admin-errors.ts:
 // nenhuma dependência de tipo do supabase-js, só a forma estrutural do
@@ -24,6 +26,36 @@ const FK_MESSAGES: { constraint: string; message: string }[] = [
   },
 ];
 
+// Mesmas FKs vistas por quem está salvando, excluindo ou replicando uma
+// demanda (AllocationDialog e o "Replicar" do BoardGrid). Sem este mapa,
+// allocations_dev_project_fkey cairia na mensagem de FK_MESSAGES, que fala em
+// mover a pessoa de time — o caso do DevDialog, não o de quem edita um card.
+// Todas indicam dado velho na tela: algo mudou em outra aba ou por outra pessoa.
+const ALLOCATION_FK_MESSAGES: { constraint: string; message: string }[] = [
+  {
+    constraint: "allocations_dev_project_fkey",
+    message: "Esta pessoa não está mais neste projeto. Recarregue a página.",
+  },
+  {
+    constraint: "allocations_sprint_project_fkey",
+    message: "Esta sprint não é do projeto desta pessoa. Recarregue a página.",
+  },
+  {
+    constraint: "allocations_sprint_id_fkey",
+    message: "Esta sprint foi excluída. Recarregue a página.",
+  },
+  {
+    // O trigger allocations_set_project costuma barrar antes com W3001; isto
+    // cobre a corrida em que a pessoa some entre o trigger e a checagem da FK.
+    constraint: "allocations_dev_id_fkey",
+    message: "Esta pessoa foi excluída. Recarregue a página.",
+  },
+];
+
+// Quem chama diz de onde veio o erro quando a mesma violação precisa de um
+// texto diferente conforme a tela. Sem contexto = mensagens genéricas do board.
+export type BoardErrorContext = "allocation";
+
 // W4xxx: public.delete_team. Os três primeiros são alcançáveis pela tela
 // (sessão que expirou, papel revogado no meio do caminho, dado velho); os
 // três últimos não são — o Select só oferece times do mesmo projeto e o botão
@@ -38,7 +70,9 @@ const TEAM_CODES: Record<string, string> = {
   W4006: "O time de destino precisa ser do mesmo projeto.",
 };
 
-export function boardErrorMessage(error: unknown): string {
+export function boardErrorMessage(error: unknown, context?: BoardErrorContext): string {
+  if (isNetworkError(error)) return "Sem conexão. Tente novamente.";
+
   const e = error as { code?: string; message?: string; details?: string } | null;
   const code = e?.code;
   const haystack = `${e?.message ?? ""} ${e?.details ?? ""}`;
@@ -50,7 +84,11 @@ export function boardErrorMessage(error: unknown): string {
   if (code && TEAM_CODES[code]) return TEAM_CODES[code];
 
   if (code === "23503") {
-    const hit = FK_MESSAGES.find((m) => haystack.includes(m.constraint));
+    const specific =
+      context === "allocation"
+        ? ALLOCATION_FK_MESSAGES.find((m) => haystack.includes(m.constraint))
+        : undefined;
+    const hit = specific ?? FK_MESSAGES.find((m) => haystack.includes(m.constraint));
     if (hit) return hit.message;
   }
 
