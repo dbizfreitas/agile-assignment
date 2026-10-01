@@ -809,7 +809,7 @@ function AllocationChip({
             </button>
           ) : null}
           <p
-            className={`text-xs font-medium leading-snug ${allowWrap ? "line-clamp-4" : "truncate"} ${canEdit ? "pr-4" : ""}`}
+            className={`text-xs font-medium leading-snug ${allowWrap ? "line-clamp-4" : "line-clamp-2"} ${canEdit ? "pr-4" : ""}`}
           >
             {allocation.title}
           </p>
