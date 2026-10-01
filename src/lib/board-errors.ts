@@ -60,6 +60,20 @@ export function boardErrorMessage(error: unknown): string {
     return "A data de fim da disponibilidade não pode ser anterior à de início.";
   }
 
+  // Constraints de sprints (issue #47). O SprintDialog barra isso antes de
+  // salvar; aqui cobrimos cliente desatualizado e corrida entre duas abas.
+  if (code === "23514" && haystack.includes("sprints_date_order")) {
+    return "A data de fim da sprint não pode ser anterior à de início.";
+  }
+
+  if (code === "23514" && haystack.includes("sprints_quarter_format")) {
+    return "Quarter inválido. Use Q1, Q2, Q3 ou Q4.";
+  }
+
+  if (code === "23505" && haystack.includes("sprints_project_code_key")) {
+    return "Já existe uma sprint com este código neste projeto.";
+  }
+
   if (code === "23514" && haystack.includes("_jira_project_format")) {
     return "Chave de projeto inválida.";
   }

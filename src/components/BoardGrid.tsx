@@ -583,6 +583,7 @@ export function BoardGrid({
           sprint={sprintDialog.sprint}
           open={sprintDialog.open}
           count={sprints.length}
+          sprints={sprints}
           allocationCount={
             sprintDialog.sprint
               ? allocations.filter((a) => a.sprint_id === sprintDialog.sprint?.id).length
