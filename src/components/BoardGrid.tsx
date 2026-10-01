@@ -53,6 +53,11 @@ import { DevDialog } from "./DevDialog";
 import { SprintDialog } from "./SprintDialog";
 import { TeamsDialog } from "./TeamsDialog";
 
+// Larguras mínimas das colunas (issue #48). Abaixo disso a grade rola na
+// horizontal, em vez de espremer os cards até ficarem ilegíveis.
+const SPRINT_COL_MIN_PX = 128;
+const DEV_COL_MIN_PX = 152;
+
 export function BoardGrid({
   canEdit,
   project,
@@ -444,11 +449,16 @@ export function BoardGrid({
               onAddSprint={() => setSprintDialog({ open: true, sprint: null })}
             />
           ) : (
-            <div className="h-full w-full overflow-x-hidden overflow-y-auto rounded-xl border border-grid-line bg-surface shadow-card board-scroll">
+            <div className="h-full w-full overflow-auto rounded-xl border border-grid-line bg-surface shadow-card board-scroll">
               <div
                 className="grid w-full"
                 style={{
-                  gridTemplateColumns: `minmax(0, 1fr) repeat(${devs.length}, minmax(0, 1fr))`,
+                  // `minWidth` força o grid a ficar mais largo que o container
+                  // quando a soma dos mínimos não cabe, e é isso que liga o
+                  // scroll horizontal. Em telas largas as colunas continuam
+                  // esticando (`1fr`) e preenchem o espaço.
+                  minWidth: SPRINT_COL_MIN_PX + devs.length * DEV_COL_MIN_PX,
+                  gridTemplateColumns: `minmax(${SPRINT_COL_MIN_PX}px, 1fr) repeat(${devs.length}, minmax(${DEV_COL_MIN_PX}px, 1fr))`,
                   gridTemplateRows: [
                     "auto",
                     ...sprintsInYear.map((s) =>
@@ -457,7 +467,7 @@ export function BoardGrid({
                   ].join(" "),
                 }}
               >
-                <div className="sticky top-0 z-20 border-b border-r border-grid-line bg-muted-foreground/15 px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <div className="board-sticky-col sticky left-0 top-0 z-40 border-b border-r border-grid-line px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Sprint
                 </div>
                 {devs.map((d) => {
@@ -472,7 +482,7 @@ export function BoardGrid({
                             setDevDialog({ open: true, dev: d });
                           }}
                           style={{ boxShadow: `inset 0 -3px 0 0 ${team?.color ?? "transparent"}` }}
-                          className="group sticky top-0 z-10 flex items-center gap-2 overflow-hidden border-b border-r border-grid-line bg-surface-2 px-3 py-2 text-left last:border-r-0 hover:bg-secondary"
+                          className="group sticky top-0 z-30 flex items-center gap-2 overflow-hidden border-b border-r border-grid-line bg-surface-2 px-3 py-2 text-left last:border-r-0 hover:bg-secondary"
                         >
                           <span
                             className="flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
@@ -631,7 +641,7 @@ function SprintRow({
     <>
       <button
         onClick={onEditSprint}
-        className="group overflow-hidden border-b border-r border-grid-line bg-muted-foreground/15 px-3 py-1.5 text-left hover:bg-secondary"
+        className="board-sticky-col group sticky left-0 z-20 overflow-hidden border-b border-r border-grid-line px-3 py-1.5 text-left hover:bg-secondary"
       >
         <div className="flex items-center gap-2">
           {sprint.quarter ? (
@@ -799,7 +809,7 @@ function AllocationChip({
             </button>
           ) : null}
           <p
-            className={`text-xs font-medium leading-snug ${allowWrap ? "line-clamp-4" : "truncate"} ${canEdit ? "pr-4" : ""}`}
+            className={`text-xs font-medium leading-snug ${allowWrap ? "line-clamp-4" : "line-clamp-2"} ${canEdit ? "pr-4" : ""}`}
           >
             {allocation.title}
           </p>
