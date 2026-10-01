@@ -8,6 +8,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +26,10 @@ import { Trash2 } from "lucide-react";
 import type { Sprint } from "@/lib/board";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
+
+function demandasPhrase(n: number) {
+  return n === 1 ? "1 demanda" : `${n} demandas`;
+}
 
 function diffDays(a: string, b: string) {
   const ms = new Date(b).getTime() - new Date(a).getTime();
@@ -26,12 +40,15 @@ export function SprintDialog({
   sprint,
   open,
   count,
+  allocationCount,
   project,
   onOpenChange,
 }: {
   sprint: Sprint | null;
   open: boolean;
   count: number;
+  /** Nº de demandas da sprint: apagadas em cascata junto com ela. */
+  allocationCount: number;
   project: JiraProjectKey;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -40,9 +57,11 @@ export function SprintDialog({
   const [quarter, setQuarter] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    setConfirming(false);
     setCode(sprint?.code ?? "");
     setQuarter(sprint?.quarter ?? "");
     setStart(sprint?.start_date ?? "");
@@ -84,6 +103,7 @@ export function SprintDialog({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["board", "sprints"] });
       qc.invalidateQueries({ queryKey: ["board", "allocations"] });
+      setConfirming(false);
       onOpenChange(false);
     },
     onError: (e: Error) => toast.error(boardErrorMessage(e)),
@@ -92,82 +112,119 @@ export function SprintDialog({
   const valid = code.trim() && start && end;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          {/* O projeto aparece como texto, não como campo: não deve haver
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            {/* O projeto aparece como texto, não como campo: não deve haver
               dúvida de onde a sprint vai nascer. */}
-          <DialogTitle>
-            {sprint ? "Editar sprint" : "Nova sprint"} · {project}
-          </DialogTitle>
-        </DialogHeader>
+            <DialogTitle>
+              {sprint ? "Editar sprint" : "Nova sprint"} · {project}
+            </DialogTitle>
+          </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="scode">Sprint</Label>
-              <Input
-                id="scode"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="26.3.1"
-                autoFocus
-              />
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="scode">Sprint</Label>
+                <Input
+                  id="scode"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="26.3.1"
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="squarter">Quarter</Label>
+                <Input
+                  id="squarter"
+                  value={quarter}
+                  onChange={(e) => setQuarter(e.target.value)}
+                  placeholder="Q3"
+                />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="squarter">Quarter</Label>
-              <Input
-                id="squarter"
-                value={quarter}
-                onChange={(e) => setQuarter(e.target.value)}
-                placeholder="Q3"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="sstart">Início</Label>
+                <Input
+                  id="sstart"
+                  type="date"
+                  value={start}
+                  onChange={(e) => setStart(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="send">Fim</Label>
+                <Input id="send" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+              </div>
             </div>
+            {start && end ? (
+              <p className="text-xs text-muted-foreground">
+                Duração: {diffDays(start, end)} dias corridos
+              </p>
+            ) : null}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="sstart">Início</Label>
-              <Input
-                id="sstart"
-                type="date"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="send">Fim</Label>
-              <Input id="send" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
-            </div>
-          </div>
-          {start && end ? (
-            <p className="text-xs text-muted-foreground">
-              Duração: {diffDays(start, end)} dias corridos
-            </p>
-          ) : null}
-        </div>
 
-        <DialogFooter className="sm:justify-between">
-          {sprint ? (
-            <Button
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
-              onClick={() => remove.mutate()}
+          <DialogFooter className="sm:justify-between">
+            {sprint ? (
+              <Button
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setConfirming(true)}
+              >
+                <Trash2 className="size-4" /> Excluir
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={() => save.mutate()} disabled={!valid || save.isPending}>
+                Salvar
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir sprint?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {allocationCount === 0 ? (
+                <>A sprint &quot;{sprint?.code}&quot; será excluída.</>
+              ) : (
+                <>
+                  A sprint &quot;{sprint?.code}&quot; será excluída junto com{" "}
+                  <strong>{demandasPhrase(allocationCount)}</strong>{" "}
+                  {allocationCount === 1 ? "alocada" : "alocadas"} nela. Essa ação não pode ser
+                  desfeita.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={remove.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={remove.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(event) => {
+                // Sem isto o Radix fecha o diálogo no clique, e uma falha na
+                // exclusão viraria um toast sem contexto nenhum na tela.
+                event.preventDefault();
+                remove.mutate();
+              }}
             >
-              <Trash2 className="size-4" /> Excluir
-            </Button>
-          ) : (
-            <span />
-          )}
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={() => save.mutate()} disabled={!valid || save.isPending}>
-              Salvar
-            </Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+              {remove.isPending ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

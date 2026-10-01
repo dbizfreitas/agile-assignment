@@ -8,6 +8,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +40,7 @@ import {
   type AllocationTipo,
 } from "@/lib/board";
 import type { JiraProjectKey } from "@/lib/projects";
+import { boardErrorMessage } from "@/lib/board-errors";
 import { extractJiraKey, jiraUrlFor, parseTicketTokens } from "@/lib/tickets";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -70,10 +81,13 @@ export function AllocationDialog({
   const [status, setStatus] = useState<AllocationStatus>("nao_especificada");
   const [tipo, setTipo] = useState<AllocationTipo>("planejado");
   const [notes, setNotes] = useState("");
+  const [confirming, setConfirming] = useState(false);
   const ticketsListRef = useRef<HTMLDivElement>(null);
   const prevTicketsCount = useRef(0);
 
   useEffect(() => {
+    // Trocar/fechar o draft nunca deve deixar a confirmação de exclusão aberta.
+    setConfirming(false);
     if (!draft) return;
     setTitle(draft.title ?? "");
     setTickets(draft.tickets ?? []);
@@ -206,180 +220,211 @@ export function AllocationDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["board", "allocations"] });
+      setConfirming(false);
       onOpenChange(false);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => toast.error(boardErrorMessage(e)),
   });
 
   return (
-    <Dialog open={!!draft} onOpenChange={onOpenChange}>
-      <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{draft?.id ? "Editar demanda" : "Nova demanda"}</DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={!!draft} onOpenChange={onOpenChange}>
+        <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{draft?.id ? "Editar demanda" : "Nova demanda"}</DialogTitle>
+          </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="title">Demanda</Label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ex.: Cadastro massivo de medidores"
-              autoFocus
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Status</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as AllocationStatus)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUS_LIST.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>
-                      <span className="flex items-center gap-2">
-                        <span className={`size-2 rounded-full ${s.dot}`} />
-                        {s.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="title">Demanda</Label>
+              <Input
+                id="title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Ex.: Cadastro massivo de medidores"
+                autoFocus
+              />
             </div>
-            <div className="space-y-1.5">
-              <Label>Tipo</Label>
-              <Select value={tipo} onValueChange={(v) => setTipo(v as AllocationTipo)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIPO_LIST.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      <span className="flex items-center gap-2">
-                        <span className={`size-2 rounded-full ${t.dot}`} />
-                        {t.label}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
 
-          <div className="space-y-1.5">
-            <Label>Tickets</Label>
-            <div className="space-y-2">
-              {/* max-h-32 ≈ 3 linhas (h-9 cada + gap-2) — a 4ª em diante rola só
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <Select value={status} onValueChange={(v) => setStatus(v as AllocationStatus)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_LIST.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        <span className="flex items-center gap-2">
+                          <span className={`size-2 rounded-full ${s.dot}`} />
+                          {s.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Tipo</Label>
+                <Select value={tipo} onValueChange={(v) => setTipo(v as AllocationTipo)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIPO_LIST.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>
+                        <span className="flex items-center gap-2">
+                          <span className={`size-2 rounded-full ${t.dot}`} />
+                          {t.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Tickets</Label>
+              <div className="space-y-2">
+                {/* max-h-32 ≈ 3 linhas (h-9 cada + gap-2) — a 4ª em diante rola só
                   aqui dentro, sem esticar o diálogo inteiro. Auto-rola para o
                   fim ao adicionar linha, para a mais nova ficar sempre visível. */}
-              <div ref={ticketsListRef} className="max-h-32 space-y-2 overflow-y-auto pr-1">
-                {tickets.map((t, i) => (
-                  <div key={i} className="flex gap-2">
-                    <div className="grid flex-1 grid-cols-2 gap-2">
-                      <Input
-                        value={t.key}
-                        onChange={(e) => handleTicketKeyChange(i, e.target.value)}
-                        onPaste={(e) => handleTicketPaste(i, e)}
-                        placeholder="PIM-7862"
-                        aria-label="Chave do ticket"
-                      />
-                      <Input
-                        value={t.url ?? ""}
-                        onChange={(e) => handleTicketUrlChange(i, e.target.value)}
-                        onPaste={(e) => handleTicketPaste(i, e)}
-                        placeholder="https://..."
-                        aria-label="Link do ticket"
-                      />
+                <div ref={ticketsListRef} className="max-h-32 space-y-2 overflow-y-auto pr-1">
+                  {tickets.map((t, i) => (
+                    <div key={i} className="flex gap-2">
+                      <div className="grid flex-1 grid-cols-2 gap-2">
+                        <Input
+                          value={t.key}
+                          onChange={(e) => handleTicketKeyChange(i, e.target.value)}
+                          onPaste={(e) => handleTicketPaste(i, e)}
+                          placeholder="PIM-7862"
+                          aria-label="Chave do ticket"
+                        />
+                        <Input
+                          value={t.url ?? ""}
+                          onChange={(e) => handleTicketUrlChange(i, e.target.value)}
+                          onPaste={(e) => handleTicketPaste(i, e)}
+                          placeholder="https://..."
+                          aria-label="Link do ticket"
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => removeTicketRow(i)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => removeTicketRow(i)}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                <Button variant="outline" size="sm" onClick={addTicketRow}>
+                  <Plus className="size-3.5" /> Ticket
+                </Button>
               </div>
-              <Button variant="outline" size="sm" onClick={addTicketRow}>
-                <Plus className="size-3.5" /> Ticket
-              </Button>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="nt">Observações</Label>
+              <Textarea
+                id="nt"
+                rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Contexto, dependências, riscos..."
+              />
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="nt">Observações</Label>
-            <Textarea
-              id="nt"
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Contexto, dependências, riscos..."
-            />
-          </div>
-        </div>
-
-        <DialogFooter className="sm:justify-between">
-          {draft?.id ? (
-            <Button
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
-              onClick={() => remove.mutate()}
-            >
-              <Trash2 className="size-4" /> Excluir
-            </Button>
-          ) : (
-            <span />
-          )}
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {draft?.id && onReplicate ? (
-              // Salvar fecha o diálogo (`save.onSuccess` chama `onOpenChange(false)`,
-              // pré-existente) — então "editar, salvar, replicar" exige reabrir o
-              // card depois de salvar; não há "salvar e o botão liberar no mesmo
-              // diálogo". Atrito aceito: a issue já descarta "salvar e replicar
-              // num gesto" de propósito.
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  {/* aria-disabled (não `disabled`): um botão `disabled` sai da
+          <DialogFooter className="sm:justify-between">
+            {draft?.id ? (
+              <Button
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setConfirming(true)}
+              >
+                <Trash2 className="size-4" /> Excluir
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {draft?.id && onReplicate ? (
+                // Salvar fecha o diálogo (`save.onSuccess` chama `onOpenChange(false)`,
+                // pré-existente) — então "editar, salvar, replicar" exige reabrir o
+                // card depois de salvar; não há "salvar e o botão liberar no mesmo
+                // diálogo". Atrito aceito: a issue já descarta "salvar e replicar
+                // num gesto" de propósito.
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {/* aria-disabled (não `disabled`): um botão `disabled` sai da
                       árvore de foco e não recebe hover/tab, então o motivo do
                       bloqueio — que a issue exige "visível" — ficaria
                       inalcançável por teclado. Com aria-disabled o botão
                       continua focável e tooltip-able; o clique é barrado no
                       próprio handler. */}
-                  <Button
-                    variant="outline"
-                    className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
-                    aria-label="Replicar na próxima sprint"
-                    aria-disabled={isDirty || !!replicateBlockReason || isReplicating}
-                    onClick={() => {
-                      if (isDirty || replicateBlockReason || isReplicating) return;
-                      onReplicate();
-                    }}
-                  >
-                    <Copy className="size-4" /> Replicar
-                  </Button>
-                </TooltipTrigger>
-                {isDirty || replicateBlockReason ? (
-                  <TooltipContent>
-                    {isDirty ? "Salve as alterações antes de replicar." : replicateBlockReason}
-                  </TooltipContent>
-                ) : null}
-              </Tooltip>
-            ) : null}
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={() => save.mutate()} disabled={!title.trim() || save.isPending}>
-              Salvar
-            </Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+                    <Button
+                      variant="outline"
+                      className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                      aria-label="Replicar na próxima sprint"
+                      aria-disabled={isDirty || !!replicateBlockReason || isReplicating}
+                      onClick={() => {
+                        if (isDirty || replicateBlockReason || isReplicating) return;
+                        onReplicate();
+                      }}
+                    >
+                      <Copy className="size-4" /> Replicar
+                    </Button>
+                  </TooltipTrigger>
+                  {isDirty || replicateBlockReason ? (
+                    <TooltipContent>
+                      {isDirty ? "Salve as alterações antes de replicar." : replicateBlockReason}
+                    </TooltipContent>
+                  ) : null}
+                </Tooltip>
+              ) : null}
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={() => save.mutate()} disabled={!title.trim() || save.isPending}>
+                Salvar
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir demanda?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {title.trim()
+                ? `A demanda "${title.trim()}" será excluída permanentemente.`
+                : "A demanda será excluída permanentemente."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={remove.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={remove.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(event) => {
+                // Sem isto o Radix fecha o diálogo no clique, e uma falha na
+                // exclusão viraria um toast sem contexto nenhum na tela.
+                event.preventDefault();
+                remove.mutate();
+              }}
+            >
+              {remove.isPending ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

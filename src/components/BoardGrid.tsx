@@ -573,6 +573,9 @@ export function BoardGrid({
           dev={devDialog.dev}
           open={devDialog.open}
           count={devs.length}
+          allocationCount={
+            devDialog.dev ? allocations.filter((a) => a.dev_id === devDialog.dev?.id).length : 0
+          }
           project={project}
           onOpenChange={(o) => setDevDialog({ open: o, dev: o ? devDialog.dev : null })}
         />
@@ -580,6 +583,11 @@ export function BoardGrid({
           sprint={sprintDialog.sprint}
           open={sprintDialog.open}
           count={sprints.length}
+          allocationCount={
+            sprintDialog.sprint
+              ? allocations.filter((a) => a.sprint_id === sprintDialog.sprint?.id).length
+              : 0
+          }
           project={project}
           onOpenChange={(o) => setSprintDialog({ open: o, sprint: o ? sprintDialog.sprint : null })}
         />
