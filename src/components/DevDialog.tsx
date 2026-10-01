@@ -8,6 +8,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,16 +37,23 @@ import { TeamColorSwatches, TeamSelectOption } from "@/components/TeamPickerCont
 
 const NEW_TEAM = "__new__";
 
+function demandasPhrase(n: number) {
+  return n === 1 ? "1 demanda" : `${n} demandas`;
+}
+
 export function DevDialog({
   dev,
   open,
   count,
+  allocationCount,
   project,
   onOpenChange,
 }: {
   dev: Dev | null;
   open: boolean;
   count: number;
+  /** Nº de demandas da pessoa: apagadas em cascata junto com ela. */
+  allocationCount: number;
   project: JiraProjectKey;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -49,6 +66,7 @@ export function DevDialog({
   // faria o React alternar entre controlado e não-controlado.
   const [availableFrom, setAvailableFrom] = useState("");
   const [availableTo, setAvailableTo] = useState("");
+  const [confirming, setConfirming] = useState(false);
 
   // MESMA queryKey do BoardGrid, de propósito: chaves diferentes fariam os dois
   // componentes brigarem pela mesma entrada de cache e o diálogo listaria times
@@ -71,6 +89,7 @@ export function DevDialog({
 
   useEffect(() => {
     if (!open) return;
+    setConfirming(false);
     setName(dev?.name ?? "");
     setTeamId(dev?.team_id ?? (teams.length > 0 ? teams[0]!.id : NEW_TEAM));
     setNewTeamName("");
@@ -147,123 +166,161 @@ export function DevDialog({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["board", "devs"] });
       qc.invalidateQueries({ queryKey: ["board", "allocations"] });
+      setConfirming(false);
       onOpenChange(false);
     },
     onError: (e: Error) => toast.error(boardErrorMessage(e)),
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{dev ? "Editar pessoa" : "Nova pessoa"}</DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{dev ? "Editar pessoa" : "Nova pessoa"}</DialogTitle>
+          </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="dname">Nome</Label>
-            <Input
-              id="dname"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Daniel A."
-              autoFocus
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="dteam">Time</Label>
-            <Select value={teamId} onValueChange={setTeamId}>
-              <SelectTrigger id="dteam">
-                <SelectValue placeholder="Selecione um time" />
-              </SelectTrigger>
-              <SelectContent>
-                {teams.map((t) => (
-                  <TeamSelectOption key={t.id} team={t} />
-                ))}
-                <SelectItem value={NEW_TEAM}>+ Criar novo time</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {teamId === NEW_TEAM ? (
-            <div className="space-y-4 rounded-lg border border-dashed border-grid-line p-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="tname">Nome do time</Label>
-                <Input
-                  id="tname"
-                  value={newTeamName}
-                  onChange={(e) => setNewTeamName(e.target.value)}
-                  placeholder="Ex.: PIM"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Cor do time</Label>
-                <TeamColorSwatches value={newTeamColor} onChange={setNewTeamColor} />
-              </div>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="dname">Nome</Label>
+              <Input
+                id="dname"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Daniel A."
+                autoFocus
+              />
             </div>
-          ) : null}
-
-          <div className="space-y-1.5">
-            <Label>Disponibilidade</Label>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="dfrom" className="text-xs font-normal text-muted-foreground">
-                  A partir de (opcional)
-                </Label>
-                <Input
-                  id="dfrom"
-                  type="date"
-                  value={availableFrom}
-                  onChange={(e) => setAvailableFrom(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="dto" className="text-xs font-normal text-muted-foreground">
-                  Até (opcional)
-                </Label>
-                <Input
-                  id="dto"
-                  type="date"
-                  value={availableTo}
-                  onChange={(e) => setAvailableTo(e.target.value)}
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="dteam">Time</Label>
+              <Select value={teamId} onValueChange={setTeamId}>
+                <SelectTrigger id="dteam">
+                  <SelectValue placeholder="Selecione um time" />
+                </SelectTrigger>
+                <SelectContent>
+                  {teams.map((t) => (
+                    <TeamSelectOption key={t.id} team={t} />
+                  ))}
+                  <SelectItem value={NEW_TEAM}>+ Criar novo time</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            {windowInverted ? (
-              <p className="text-xs text-destructive">
-                A data de fim não pode ser anterior à de início.
-              </p>
+
+            {teamId === NEW_TEAM ? (
+              <div className="space-y-4 rounded-lg border border-dashed border-grid-line p-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="tname">Nome do time</Label>
+                  <Input
+                    id="tname"
+                    value={newTeamName}
+                    onChange={(e) => setNewTeamName(e.target.value)}
+                    placeholder="Ex.: PIM"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Cor do time</Label>
+                  <TeamColorSwatches value={newTeamColor} onChange={setNewTeamColor} />
+                </div>
+              </div>
+            ) : null}
+
+            <div className="space-y-1.5">
+              <Label>Disponibilidade</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="dfrom" className="text-xs font-normal text-muted-foreground">
+                    A partir de (opcional)
+                  </Label>
+                  <Input
+                    id="dfrom"
+                    type="date"
+                    value={availableFrom}
+                    onChange={(e) => setAvailableFrom(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="dto" className="text-xs font-normal text-muted-foreground">
+                    Até (opcional)
+                  </Label>
+                  <Input
+                    id="dto"
+                    type="date"
+                    value={availableTo}
+                    onChange={(e) => setAvailableTo(e.target.value)}
+                  />
+                </div>
+              </div>
+              {windowInverted ? (
+                <p className="text-xs text-destructive">
+                  A data de fim não pode ser anterior à de início.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Em branco, a pessoa fica disponível em todas as sprints. A sprint precisa caber
+                  inteira na janela para ficar habilitada.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="sm:justify-between">
+            {dev ? (
+              <Button
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setConfirming(true)}
+              >
+                <Trash2 className="size-4" /> Remover
+              </Button>
             ) : (
-              <p className="text-xs text-muted-foreground">
-                Em branco, a pessoa fica disponível em todas as sprints. A sprint precisa caber
-                inteira na janela para ficar habilitada.
-              </p>
+              <span />
             )}
-          </div>
-        </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={() => save.mutate()} disabled={!canSave || save.isPending}>
+                Salvar
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        <DialogFooter className="sm:justify-between">
-          {dev ? (
-            <Button
-              variant="ghost"
-              className="text-destructive hover:text-destructive"
-              onClick={() => remove.mutate()}
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover pessoa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {allocationCount === 0 ? (
+                <>&quot;{dev?.name}&quot; será removida do quadro.</>
+              ) : (
+                <>
+                  &quot;{dev?.name}&quot; será removida do quadro junto com{" "}
+                  <strong>{demandasPhrase(allocationCount)}</strong>{" "}
+                  {allocationCount === 1 ? "atribuída" : "atribuídas"} a ela. Essa ação não pode ser
+                  desfeita.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={remove.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={remove.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(event) => {
+                // Sem isto o Radix fecha o diálogo no clique, e uma falha na
+                // exclusão viraria um toast sem contexto nenhum na tela.
+                event.preventDefault();
+                remove.mutate();
+              }}
             >
-              <Trash2 className="size-4" /> Remover
-            </Button>
-          ) : (
-            <span />
-          )}
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={() => save.mutate()} disabled={!canSave || save.isPending}>
-              Salvar
-            </Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+              {remove.isPending ? "Removendo..." : "Remover"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
