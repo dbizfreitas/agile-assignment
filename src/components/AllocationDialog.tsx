@@ -213,7 +213,7 @@ export function AllocationDialog({
 
   return (
     <Dialog open={!!draft} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{draft?.id ? "Editar demanda" : "Nova demanda"}</DialogTitle>
         </DialogHeader>
@@ -335,7 +335,7 @@ export function AllocationDialog({
           ) : (
             <span />
           )}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {draft?.id && onReplicate ? (
               // Salvar fecha o diálogo (`save.onSuccess` chama `onOpenChange(false)`,
               // pré-existente) — então "editar, salvar, replicar" exige reabrir o
@@ -353,13 +353,14 @@ export function AllocationDialog({
                   <Button
                     variant="outline"
                     className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                    aria-label="Replicar na próxima sprint"
                     aria-disabled={isDirty || !!replicateBlockReason || isReplicating}
                     onClick={() => {
                       if (isDirty || replicateBlockReason || isReplicating) return;
                       onReplicate();
                     }}
                   >
-                    <Copy className="size-4" /> Replicar na próxima sprint
+                    <Copy className="size-4" /> Replicar
                   </Button>
                 </TooltipTrigger>
                 {isDirty || replicateBlockReason ? (
