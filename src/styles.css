@@ -6,7 +6,6 @@
    by src/hooks/use-theme.ts. */
 @custom-variant dark (&:is(.dark *));
 
-
 /*
  * Design system definition.
  *
@@ -239,4 +238,17 @@
 @utility board-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--grid-line) transparent;
+}
+
+/* Fundo da coluna fixa (sticky) da grade: o mesmo tom de
+   `bg-muted-foreground/15`, só que pintado sobre a superfície opaca.
+   Sozinho, o tom translúcido deixaria os cards aparecerem através da coluna
+   durante o scroll horizontal. `hover:bg-*` continua funcionando, porque troca
+   só a `background-color` por baixo da camada. */
+@utility board-sticky-col {
+  background-color: var(--color-surface);
+  background-image: linear-gradient(
+    color-mix(in oklab, var(--color-muted-foreground) 15%, transparent),
+    color-mix(in oklab, var(--color-muted-foreground) 15%, transparent)
+  );
 }
