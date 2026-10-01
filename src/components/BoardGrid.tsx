@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { CalendarPlus, Copy, ExternalLink, Pencil, Plus, Search, UserPlus, Users } from "lucide-react";
+import {
+  CalendarPlus,
+  Copy,
+  ExternalLink,
+  Loader2,
+  Pencil,
+  Plus,
+  Search,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import {
   accentClassFor,
   chipClassFor,
@@ -231,11 +241,41 @@ export function BoardGrid({
       return nextSprint;
     },
     onSuccess: (nextSprint) => {
-      qc.invalidateQueries({ queryKey: ["board", "allocations"] });
       toast.success(`Replicado em ${nextSprint.code}.`);
+      // Retornar a promise faz a mutation só terminar após o refetch — assim
+      // a trava de `requestReplicate` só solta com o cache atualizado e a
+      // `position` da próxima réplica não é calculada com dados velhos.
+      return qc.invalidateQueries({ queryKey: ["board", "allocations"] });
     },
     onError: (e: Error) => toast.error(boardErrorMessage(e)),
   });
+
+  // Trava SÍNCRONA contra cliques repetidos: `isPending` não basta, pois o
+  // closure do onClick pode estar desatualizado entre cliques rápidos e
+  // deixar passar várias chamadas antes do re-render. O ref bloqueia na hora;
+  // o estado é só um espelho para renderizar o indicador de "replicando".
+  const replicatingIds = useRef(new Set<string>());
+  const [replicatingSet, setReplicatingSet] = useState<ReadonlySet<string>>(new Set());
+
+  const requestReplicate = async (allocation: Allocation) => {
+    if (replicatingIds.current.has(allocation.id)) return;
+    replicatingIds.current.add(allocation.id);
+    setReplicatingSet((prev) => new Set(prev).add(allocation.id));
+    try {
+      // mutateAsync (e não `mutate(a, { onSettled })`): no TanStack v5 os
+      // callbacks por chamada só disparam para a última chamada.
+      await replicate.mutateAsync(allocation);
+    } catch {
+      // Erro já tratado (toast) pelo onError da mutation.
+    } finally {
+      replicatingIds.current.delete(allocation.id);
+      setReplicatingSet((prev) => {
+        const next = new Set(prev);
+        next.delete(allocation.id);
+        return next;
+      });
+    }
+  };
 
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
   const teamPosition = useMemo(() => new Map(teams.map((t, i) => [t.id, i])), [teams]);
@@ -490,12 +530,13 @@ export function BoardGrid({
                         toast.error(blockReason);
                         return;
                       }
-                      replicate.mutate(a);
+                      requestReplicate(a);
                     }}
                     onDrop={(id, devId) => {
                       if (!canEdit) return;
                       move.mutate({ id, sprint_id: s.id, dev_id: devId });
                     }}
+                    replicatingIds={replicatingSet}
                   />
                 ))}
               </div>
@@ -514,7 +555,7 @@ export function BoardGrid({
             draft?.id
               ? () => {
                   const allocation = allocations.find((a) => a.id === draft.id);
-                  if (allocation) replicate.mutate(allocation);
+                  if (allocation) requestReplicate(allocation);
                 }
               : undefined
           }
@@ -526,7 +567,7 @@ export function BoardGrid({
                 })()
               : undefined
           }
-          isReplicating={replicate.isPending}
+          isReplicating={!!draft?.id && replicatingSet.has(draft.id)}
         />
         <DevDialog
           dev={devDialog.dev}
@@ -561,6 +602,7 @@ function SprintRow({
   onEdit,
   onReplicate,
   onDrop,
+  replicatingIds,
 }: {
   sprint: Sprint;
   devs: Dev[];
@@ -574,6 +616,7 @@ function SprintRow({
   onEdit: (a: Allocation) => void;
   onReplicate: (a: Allocation) => void;
   onDrop: (allocationId: string, devId: string) => void;
+  replicatingIds: ReadonlySet<string>;
 }) {
   return (
     <>
@@ -635,6 +678,7 @@ function SprintRow({
                   canEdit={canEdit}
                   onEdit={() => onEdit(a)}
                   onReplicate={() => onReplicate(a)}
+                  isReplicating={replicatingIds.has(a.id)}
                 />
               ))}
             </div>
@@ -693,6 +737,7 @@ function AllocationChip({
   canEdit,
   onEdit,
   onReplicate,
+  isReplicating,
 }: {
   allocation: Allocation;
   dimmed: boolean;
@@ -700,6 +745,7 @@ function AllocationChip({
   canEdit: boolean;
   onEdit: () => void;
   onReplicate: () => void;
+  isReplicating: boolean;
 }) {
   const chipClass = chipClassFor(allocation);
   const washClass = washClassFor(allocation);
@@ -724,13 +770,23 @@ function AllocationChip({
                 // Sem isto, o clique no ícone também dispara o onClick do
                 // card (linha acima) e abre o AllocationDialog junto.
                 e.stopPropagation();
+                // Replicação em andamento: ignora o clique (evita cópias
+                // duplicadas por cliques rápidos).
+                if (isReplicating) return;
                 onReplicate();
               }}
-              title="Replicar na próxima sprint"
-              aria-label="Replicar na próxima sprint"
-              className="absolute right-1 top-1 z-10 rounded p-0.5 text-foreground/60 opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover/chip:opacity-100"
+              aria-disabled={isReplicating}
+              title={isReplicating ? "Replicando…" : "Replicar na próxima sprint"}
+              aria-label={isReplicating ? "Replicando…" : "Replicar na próxima sprint"}
+              className={`absolute right-1 top-1 z-10 rounded p-0.5 text-foreground/60 transition-opacity hover:bg-background/60 hover:text-foreground group-hover/chip:opacity-100 ${
+                isReplicating ? "cursor-wait opacity-100" : "opacity-0"
+              }`}
             >
-              <Copy className="size-3" />
+              {isReplicating ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Copy className="size-3" />
+              )}
             </button>
           ) : null}
           <p
