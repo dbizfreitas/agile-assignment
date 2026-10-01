@@ -49,6 +49,7 @@ import {
   parseTicketTokens,
   ticketKeyMismatch,
   ticketKeyProblem,
+  ticketProjectMismatch,
   ticketUrlProblem,
 } from "@/lib/tickets";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -196,6 +197,18 @@ export function AllocationDialog({
         `${missingKeys} link(s) colado(s) sem chave Jira reconhecida — preencha manualmente.`,
       );
     }
+    const invalidKeys = parsed.filter((t) => ticketKeyProblem(t) !== null).length;
+    if (invalidKeys > 0) {
+      toast.warning(
+        `${invalidKeys} item(ns) colado(s) não é(são) chave Jira (ex.: ${project}-123) — corrija ou remova a linha.`,
+      );
+    }
+    const fromOther = parsed.filter((t) => ticketProjectMismatch(t, project) !== null).length;
+    if (fromOther > 0) {
+      toast.warning(
+        `${fromOther} ticket(s) colado(s) de outro projeto — confira se são do ${project}.`,
+      );
+    }
     setTickets((prev) => {
       const next = [...prev];
       next.splice(index, 1, ...parsed);
@@ -340,6 +353,7 @@ export function AllocationDialog({
                     const typed = t.key.trim().toUpperCase();
                     const urlProblem = ticketUrlProblem(t.url);
                     const keyProblem = ticketKeyProblem(t);
+                    const otherProject = ticketProjectMismatch(t, project);
                     return (
                       <div key={i} className="space-y-1">
                         <div className="flex gap-2">
@@ -374,6 +388,11 @@ export function AllocationDialog({
                           <p className="text-xs text-destructive">
                             "{t.key.trim()}" não é uma chave Jira (ex.: {project}-123). Corrija a
                             chave ou remova a linha.
+                          </p>
+                        ) : null}
+                        {otherProject ? (
+                          <p className="text-xs text-amber-600 dark:text-amber-400">
+                            {normalizeJiraKey(t.key)} é do projeto {otherProject}, não do {project}.
                           </p>
                         ) : null}
                         {urlProblem === "esquema" ? (
