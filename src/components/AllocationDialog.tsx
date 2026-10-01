@@ -142,13 +142,29 @@ export function AllocationDialog({
     );
 
   /** Cola vários links/chaves Jira de uma vez (um por linha, espaço ou vírgula) e expande em linhas. */
-  const handleTicketPaste = (index: number, e: React.ClipboardEvent<HTMLInputElement>) => {
+  const handleTicketPaste = (
+    index: number,
+    field: "key" | "url",
+    e: React.ClipboardEvent<HTMLInputElement>,
+  ) => {
     const text = e.clipboardData.getData("text");
     const parsed = parseTicketTokens(text);
     if (parsed.length <= 1) {
       const [token] = parsed;
+      // Token único: o texto colado é o próprio token.
+      const isUrl = /^https?:\/\//i.test(text.trim());
       if (token && !token.key && token.url) {
-        toast.warning("Link colado não tem uma chave Jira reconhecida — preencha a chave manualmente.");
+        toast.warning(
+          "Link colado não tem uma chave Jira reconhecida — preencha a chave manualmente.",
+        );
+      }
+      // URL colada no campo de chave: sem isso a URL inteira vira a chave e o
+      // link derivado sai quebrado. Distribui a URL entre chave e link.
+      if (field === "key" && token && isUrl) {
+        e.preventDefault();
+        setTickets((prev) =>
+          prev.map((t, i) => (i === index ? { key: token.key, url: token.url } : t)),
+        );
       }
       return;
     }
@@ -298,14 +314,14 @@ export function AllocationDialog({
                         <Input
                           value={t.key}
                           onChange={(e) => handleTicketKeyChange(i, e.target.value)}
-                          onPaste={(e) => handleTicketPaste(i, e)}
+                          onPaste={(e) => handleTicketPaste(i, "key", e)}
                           placeholder="PIM-7862"
                           aria-label="Chave do ticket"
                         />
                         <Input
                           value={t.url ?? ""}
                           onChange={(e) => handleTicketUrlChange(i, e.target.value)}
-                          onPaste={(e) => handleTicketPaste(i, e)}
+                          onPaste={(e) => handleTicketPaste(i, "url", e)}
                           placeholder="https://..."
                           aria-label="Link do ticket"
                         />
