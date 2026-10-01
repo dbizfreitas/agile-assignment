@@ -25,6 +25,32 @@ export function ticketKeyMismatch(ticket: AllocationTicket): string | null {
   return linked && linked !== key ? linked : null;
 }
 
+// Regra única de link válido (issue #51). A migration
+// 20261001180000_allocation_ticket_urls.sql aplica a mesma regra no banco:
+// se mudar aqui, mude lá também.
+const URL_START_RE = /https?:\/\//gi;
+const SINGLE_URL_RE = /^https?:\/\/[^\s/?#]+\S*$/i;
+
+export type TicketUrlProblem = "esquema" | "varios";
+
+/**
+ * Problema do link do ticket, ou `null` quando ele está vazio ou é um único
+ * link `http(s)://`. "varios" vem antes de "esquema" para o diálogo poder
+ * oferecer "Manter só o primeiro" no caso de link colado repetido.
+ */
+export function ticketUrlProblem(url: string | null): TicketUrlProblem | null {
+  const value = url?.trim() ?? "";
+  if (!value) return null;
+  if ((value.match(URL_START_RE) ?? []).length > 1) return "varios";
+  return SINGLE_URL_RE.test(value) ? null : "esquema";
+}
+
+/** Primeiro link de um valor com vários `http(s)://` concatenados. */
+export function firstTicketUrl(url: string): string {
+  const [first] = url.trim().split(/(?=https?:\/\/)/i);
+  return (first ?? "").trim();
+}
+
 /** Interpreta um token colado (URL do Jira ou chave solta) como um ticket. */
 export function parseTicketToken(token: string): AllocationTicket {
   const trimmed = token.trim();
@@ -35,11 +61,21 @@ export function parseTicketToken(token: string): AllocationTicket {
   return { key, url: key ? jiraUrlFor(key) : null };
 }
 
-/** Quebra um texto colado com vários tickets (um por linha/espaço/vírgula). */
+/**
+ * Quebra um texto colado com vários tickets (um por linha/espaço/vírgula, ou
+ * links grudados sem separador) e descarta repetidos (issue #51: o mesmo link
+ * colado várias vezes seguidas virava um link só, inválido).
+ */
 export function parseTicketTokens(text: string): AllocationTicket[] {
+  const seen = new Set<string>();
   return text
-    .split(/[\s,]+/)
+    .split(/[\s,]+|(?=https?:\/\/)/i)
     .map((t) => t.trim())
-    .filter(Boolean)
+    .filter((t) => {
+      const id = t.toLowerCase();
+      if (!t || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
     .map(parseTicketToken);
 }
