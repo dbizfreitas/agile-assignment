@@ -26,6 +26,12 @@ export function RouletteView() {
   const winnerIndex = participants.findIndex((p) => p.email === roulette.lastWinner);
   const winner = winnerIndex === -1 ? undefined : participants[winnerIndex];
 
+  // O grid exibe em ordem alfabética, mas a cor continua vindo da posição em
+  // sort_order (o `index` original): reordenar a tela não troca a cor de ninguém.
+  const byName = participants
+    .map((p, index) => ({ p, index }))
+    .sort((a, b) => a.p.name.localeCompare(b.p.name, "pt-BR"));
+
   return (
     // A roleta é a única das quatro sem rolagem interna própria, então ela
     // rola inteira: `flex-1` + `overflow-y-auto` no lugar do `min-h-screen`.
@@ -80,11 +86,11 @@ export function RouletteView() {
         </Card>
 
         <div className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-3">
-          {participants.map((p, i) => (
+          {byName.map(({ p, index }) => (
             <ParticipantCard
               key={p.email}
               participant={p}
-              index={i}
+              index={index}
               photoUrl={photos[p.email]}
               drawn={roulette.drawn.has(p.email)}
               skipped={roulette.skipped.has(p.email)}
