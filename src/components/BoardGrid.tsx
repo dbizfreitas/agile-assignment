@@ -28,6 +28,7 @@ import {
   formatAvailability,
   formatRange,
   getSprintYear,
+  hasSpecStatus,
   isDevAvailableInSprint,
   normalizeSearchText,
   resolveNextSprint,
@@ -335,7 +336,9 @@ export function BoardGrid({
 
   const term = normalizeSearchText(search);
   const matches = (a: Allocation) => {
-    const okStatus = statusFilter === "todos" || a.status === statusFilter;
+    // Férias não tem status: some quando há filtro de status específico.
+    const okStatus =
+      statusFilter === "todos" || (hasSpecStatus(a.tipo) && a.status === statusFilter);
     const okTipo = tipoFilter === "todos" || a.tipo === tipoFilter;
     const okTerm =
       !term ||
@@ -896,11 +899,13 @@ function AllocationChip({
       </HoverCardTrigger>
       <HoverCardContent side="right" className="w-72 space-y-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusInfo(allocation.status).chip}`}
-          >
-            {statusInfo(allocation.status).label}
-          </span>
+          {hasSpecStatus(allocation.tipo) ? (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusInfo(allocation.status).chip}`}
+            >
+              {statusInfo(allocation.status).label}
+            </span>
+          ) : null}
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${chipClass}`}>
             {tipoInfo(allocation.tipo).label}
           </span>

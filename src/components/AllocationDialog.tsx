@@ -35,6 +35,7 @@ import {
   STATUS_LIST,
   TIPO_LIST,
   formatRange,
+  hasSpecStatus,
   isDevAvailableInSprint,
   type Allocation,
   type AllocationStatus,
@@ -380,9 +381,14 @@ export function AllocationDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="alloc-status">Status</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v as AllocationStatus)}>
+                {/* Férias ignora o status: desabilita sem resetar, para restaurar o valor ao trocar de tipo. */}
+                <Select
+                  value={status}
+                  onValueChange={(v) => setStatus(v as AllocationStatus)}
+                  disabled={!hasSpecStatus(tipo)}
+                >
                   <SelectTrigger id="alloc-status">
-                    <SelectValue />
+                    <SelectValue>{hasSpecStatus(tipo) ? undefined : "Não se aplica"}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {STATUS_LIST.map((s) => (

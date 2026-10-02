@@ -124,6 +124,9 @@ export const TIPO_LIST: {
 export const statusInfo = (s: AllocationStatus) =>
   STATUS_LIST.find((x) => x.value === s) ?? STATUS_LIST[0]!;
 
+/** Férias/ausência não têm status de especificação (a coluna segue gravada, mas é ignorada). */
+export const hasSpecStatus = (t: AllocationTipo) => t !== "ferias";
+
 export const tipoInfo = (t: AllocationTipo) =>
   TIPO_LIST.find((x) => x.value === t) ?? TIPO_LIST[0]!;
 
