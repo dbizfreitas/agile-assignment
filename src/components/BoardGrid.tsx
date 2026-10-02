@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,7 @@ import {
   type Sprint,
   type Team,
 } from "@/lib/board";
+import type { BoardSearch } from "@/lib/board-search";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
@@ -62,6 +63,8 @@ const DEV_COL_MIN_PX = 152;
 export function BoardGrid({
   canEdit,
   project,
+  filters,
+  onFiltersChange,
 }: {
   canEdit: boolean;
   /**
@@ -73,6 +76,15 @@ export function BoardGrid({
    * segundo seletor dentro do quadro é exatamente o que esta frente desfaz.
    */
   project: JiraProjectKey;
+  /**
+   * Ano, busca, tipo e status vivem na URL (issue #55); a rota é dona do
+   * estado e o board só o lê. Chave ausente = padrão.
+   *
+   * `onFiltersChange` recebe um patch parcial: valor padrão ("todos", busca
+   * vazia) vai como `undefined`, o que remove a chave da URL.
+   */
+  filters: BoardSearch;
+  onFiltersChange: (patch: Partial<BoardSearch>) => void;
 }) {
   const qc = useQueryClient();
   const [draft, setDraft] = useState<AllocationDraft | null>(null);
@@ -85,14 +97,41 @@ export function BoardGrid({
     sprint: null,
   });
   const [teamsDialog, setTeamsDialog] = useState(false);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<AllocationStatus | "todos">("todos");
-  const [tipoFilter, setTipoFilter] = useState<AllocationTipo | "todos">("todos");
   const [dragOver, setDragOver] = useState<string | null>(null);
-  // Ano corrente do relógio, não o da sprint mais próxima — decisão da spec.
-  // Filtro local, sem persistência: reseta a cada carregamento, igual aos
-  // filtros de busca/status/tipo já existentes neste componente.
-  const [yearFilter, setYearFilter] = useState<number>(() => new Date().getFullYear());
+  // Filtros derivados da URL. Sem `ano`, vale o ano corrente do relógio, não o
+  // da sprint mais próxima — decisão da spec.
+  const urlQ = filters.q ?? "";
+  const statusFilter: AllocationStatus | "todos" = filters.status ?? "todos";
+  const tipoFilter: AllocationTipo | "todos" = filters.tipo ?? "todos";
+  const yearFilter = filters.ano ?? new Date().getFullYear();
+
+  // O input NÃO é controlado direto pela URL: o router aplica a navegação de
+  // forma assíncrona (transition), então o valor voltaria atrasado e o cursor
+  // pularia para o fim ao editar no meio do texto, perdendo teclas em digitação
+  // rápida. O texto fica em estado local; a URL é só um espelho dele.
+  const [search, setSearch] = useState(urlQ);
+  // Valores que nós mesmos gravaram na URL e que ainda podem chegar de volta
+  // (possivelmente fora de ordem). Não são mudança externa, então não mexem no
+  // texto que o usuário está digitando.
+  const pushedQ = useRef(new Set<string>());
+  const onSearchChange = (text: string) => {
+    setSearch(text);
+    pushedQ.current.add(text.trim() === "" ? "" : text);
+    onFiltersChange({ q: text || undefined });
+  };
+  // Ressincroniza quando `q` muda por fora (link, F5, voltar, reset na troca
+  // de projeto). Só se diferir do texto atual, para não brigar com a digitação.
+  useEffect(() => {
+    if (pushedQ.current.has(urlQ)) {
+      // Chegou o que gravamos; descarta o histórico se for o valor atual.
+      if (urlQ === (search.trim() === "" ? "" : search)) pushedQ.current.clear();
+      return;
+    }
+    pushedQ.current.clear();
+    setSearch(urlQ);
+    // Só reage à URL: `search` é lido apenas para comparar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlQ]);
 
   // As quatro queries são `select("*")` planas com um `.eq("jira_project", …)`
   // cada — sem `!inner`, sem query dependente: `devs` e `allocations` têm o
@@ -337,7 +376,7 @@ export function BoardGrid({
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => onSearchChange(e.target.value)}
                 placeholder="Buscar demanda ou ticket"
                 className="h-9 w-56 pl-8"
               />
@@ -373,7 +412,10 @@ export function BoardGrid({
                 visualização, não de edição, e vale para leitor e editor. */}
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-medium text-muted-foreground">Ano</span>
-              <Select value={String(yearFilter)} onValueChange={(v) => setYearFilter(Number(v))}>
+              <Select
+                value={String(yearFilter)}
+                onValueChange={(v) => onFiltersChange({ ano: Number(v) })}
+              >
                 <SelectTrigger className="h-9 w-24" aria-label="Ano">
                   <SelectValue />
                 </SelectTrigger>
@@ -392,14 +434,17 @@ export function BoardGrid({
             <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               Tipo
             </span>
-            <FilterChip active={tipoFilter === "todos"} onClick={() => setTipoFilter("todos")}>
+            <FilterChip
+              active={tipoFilter === "todos"}
+              onClick={() => onFiltersChange({ tipo: undefined })}
+            >
               Todos
             </FilterChip>
             {TIPO_LIST.map((t) => (
               <FilterChip
                 key={t.value}
                 active={tipoFilter === t.value}
-                onClick={() => setTipoFilter(t.value)}
+                onClick={() => onFiltersChange({ tipo: t.value })}
               >
                 <span className={`size-2 rounded-full ${t.dot}`} />
                 {t.label}
@@ -411,14 +456,17 @@ export function BoardGrid({
             <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               Status
             </span>
-            <FilterChip active={statusFilter === "todos"} onClick={() => setStatusFilter("todos")}>
+            <FilterChip
+              active={statusFilter === "todos"}
+              onClick={() => onFiltersChange({ status: undefined })}
+            >
               Todos
             </FilterChip>
             {STATUS_LIST.map((s) => (
               <FilterChip
                 key={s.value}
                 active={statusFilter === s.value}
-                onClick={() => setStatusFilter(s.value)}
+                onClick={() => onFiltersChange({ status: s.value })}
               >
                 <span className={`size-2 rounded-full ${s.dot}`} />
                 {s.label}
