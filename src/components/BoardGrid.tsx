@@ -690,18 +690,23 @@ function SprintRow({
     <>
       <button
         onClick={onEditSprint}
+        title={[sprint.quarter, sprint.code, formatRange(sprint.start_date, sprint.end_date)]
+          .filter(Boolean)
+          .join(" · ")}
         className="board-sticky-col group sticky left-0 z-20 overflow-hidden border-b border-r border-grid-line px-3 py-1.5 text-left hover:bg-secondary"
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-start gap-2">
           {sprint.quarter ? (
             <span className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
               {sprint.quarter}
             </span>
           ) : null}
-          <span className="truncate text-sm font-semibold">{sprint.code}</span>
+          <span className="min-w-0 break-words text-sm font-semibold">{sprint.code}</span>
           <Pencil className="ml-auto size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60" />
         </div>
-        <p className="truncate text-[11px] text-muted-foreground">
+        {/* Em 128px o período não cabe em uma linha: ele quebra no espaço
+            depois do "–" em vez de truncar (issue #56). */}
+        <p className="text-[11px] leading-tight text-muted-foreground">
           {formatRange(sprint.start_date, sprint.end_date)}
         </p>
       </button>
