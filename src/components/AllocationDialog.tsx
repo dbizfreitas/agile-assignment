@@ -34,10 +34,14 @@ import { Copy, Plus, Trash2 } from "lucide-react";
 import {
   STATUS_LIST,
   TIPO_LIST,
+  formatRange,
+  isDevAvailableInSprint,
   type Allocation,
   type AllocationStatus,
   type AllocationTicket,
   type AllocationTipo,
+  type Dev,
+  type Sprint,
 } from "@/lib/board";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
@@ -68,6 +72,8 @@ export type AllocationDraft = {
 export function AllocationDialog({
   draft,
   project,
+  sprints,
+  devs,
   onOpenChange,
   onReplicate,
   replicateBlockReason,
@@ -76,6 +82,10 @@ export function AllocationDialog({
   draft: AllocationDraft | null;
   /** Obrigatório no insert; o cartão nasce no projeto da tela. */
   project: JiraProjectKey;
+  /** Sprints e pessoas do board atual: alimentam os Selects que são a
+   *  alternativa por teclado ao arrastar o card entre células. */
+  sprints: Sprint[];
+  devs: Dev[];
   onOpenChange: (open: boolean) => void;
   /** Ausente (undefined) quando `draft` é um card novo, ainda sem `id`. */
   onReplicate?: (() => void) | undefined;
@@ -91,6 +101,8 @@ export function AllocationDialog({
   const [status, setStatus] = useState<AllocationStatus>("nao_especificada");
   const [tipo, setTipo] = useState<AllocationTipo>("planejado");
   const [notes, setNotes] = useState("");
+  const [sprintId, setSprintId] = useState("");
+  const [devId, setDevId] = useState("");
   const [confirming, setConfirming] = useState(false);
   const ticketsListRef = useRef<HTMLDivElement>(null);
   const prevTicketsCount = useRef(0);
@@ -104,6 +116,8 @@ export function AllocationDialog({
     setStatus(draft.status ?? "nao_especificada");
     setTipo(draft.tipo ?? "planejado");
     setNotes(draft.notes ?? "");
+    setSprintId(draft.sprint_id);
+    setDevId(draft.dev_id);
     // Evita que o carregamento inicial dos tickets do draft seja lido como
     // "linha adicionada" pelo efeito de auto-scroll abaixo (abrir uma demanda
     // com vários tickets já deve mostrar do topo, não pular pro último).
@@ -220,8 +234,8 @@ export function AllocationDialog({
     mutationFn: async () => {
       if (!draft) return;
       const payload = {
-        sprint_id: draft.sprint_id,
-        dev_id: draft.dev_id,
+        sprint_id: sprintId,
+        dev_id: devId,
         title: title.trim(),
         tickets: tickets
           .filter((t) => t.key.trim() || t.url?.trim())
@@ -255,6 +269,7 @@ export function AllocationDialog({
     if (title.trim() !== (draft.title ?? "").trim()) return true;
     if (status !== (draft.status ?? "nao_especificada")) return true;
     if (tipo !== (draft.tipo ?? "planejado")) return true;
+    if (sprintId !== draft.sprint_id || devId !== draft.dev_id) return true;
     if ((notes.trim() || null) !== (draft.notes ?? null)) return true;
     const a = normalizedTickets(tickets);
     const b = normalizedTickets(draft.tickets ?? []);
@@ -267,6 +282,18 @@ export function AllocationDialog({
   // allocations_ticket_urls_valid); a da chave é só do cliente.
   const hasTicketUrlProblem = tickets.some((t) => ticketUrlProblem(t.url) !== null);
   const hasTicketKeyProblem = tickets.some((t) => ticketKeyProblem(t) !== null);
+
+  // O drop na grade rejeita célula fora da janela de disponibilidade; aqui a
+  // mesma regra vale para o Salvar. Combinação que já era a do cartão (legado,
+  // fora da janela) continua permitida — senão nem o título dele seria editável.
+  const selectedSprint = sprints.find((s) => s.id === sprintId);
+  const selectedDev = devs.find((d) => d.id === devId);
+  const isOriginalCell = !!draft && sprintId === draft.sprint_id && devId === draft.dev_id;
+  const cellUnavailable =
+    !isOriginalCell &&
+    !!selectedSprint &&
+    !!selectedDev &&
+    !isDevAvailableInSprint(selectedDev, selectedSprint);
 
   const remove = useMutation({
     mutationFn: async () => {
@@ -302,11 +329,59 @@ export function AllocationDialog({
               />
             </div>
 
+            {/* Alternativa por teclado ao arrastar o card para outra célula. */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Status</Label>
+                <Label htmlFor="alloc-sprint">Sprint</Label>
+                <Select value={sprintId} onValueChange={setSprintId}>
+                  <SelectTrigger id="alloc-sprint">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sprints.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.code} · {formatRange(s.start_date, s.end_date)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="alloc-dev">Pessoa</Label>
+                <Select value={devId} onValueChange={setDevId}>
+                  <SelectTrigger id="alloc-dev">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {devs.map((d) => {
+                      // Desabilita quem está fora da janela na sprint escolhida;
+                      // a pessoa original do cartão nunca some da lista.
+                      const blocked =
+                        !!selectedSprint &&
+                        !isDevAvailableInSprint(d, selectedSprint) &&
+                        !(draft && draft.dev_id === d.id && draft.sprint_id === sprintId);
+                      return (
+                        <SelectItem key={d.id} value={d.id} disabled={blocked}>
+                          {d.name}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+              {cellUnavailable ? (
+                <p role="alert" className="col-span-2 text-xs text-destructive">
+                  {selectedDev?.name} está fora da janela de disponibilidade em{" "}
+                  {selectedSprint?.code}. Escolha outra pessoa ou sprint.
+                </p>
+              ) : null}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="alloc-status">Status</Label>
                 <Select value={status} onValueChange={(v) => setStatus(v as AllocationStatus)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="alloc-status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -322,9 +397,9 @@ export function AllocationDialog({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Tipo</Label>
+                <Label htmlFor="alloc-tipo">Tipo</Label>
                 <Select value={tipo} onValueChange={(v) => setTipo(v as AllocationTipo)}>
-                  <SelectTrigger>
+                  <SelectTrigger id="alloc-tipo">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -517,7 +592,13 @@ export function AllocationDialog({
               <Button
                 onClick={() => save.mutate()}
                 disabled={
-                  !title.trim() || hasTicketUrlProblem || hasTicketKeyProblem || save.isPending
+                  !title.trim() ||
+                  hasTicketUrlProblem ||
+                  hasTicketKeyProblem ||
+                  cellUnavailable ||
+                  !sprintId ||
+                  !devId ||
+                  save.isPending
                 }
               >
                 Salvar

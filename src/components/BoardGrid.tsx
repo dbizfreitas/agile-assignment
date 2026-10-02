@@ -609,6 +609,8 @@ export function BoardGrid({
         <AllocationDialog
           draft={draft}
           project={project}
+          sprints={sprints}
+          devs={devs}
           onOpenChange={(o) => !o && setDraft(null)}
           onReplicate={
             draft?.id
@@ -758,7 +760,8 @@ function SprintRow({
             {canEdit && available ? (
               <button
                 onClick={() => onAdd(d.id)}
-                className="pointer-events-none absolute inset-x-1.5 top-full z-10 mt-0 flex items-center justify-center gap-1 rounded-md border border-dashed border-grid-line bg-surface/90 py-1 text-[11px] text-muted-foreground opacity-0 shadow-card backdrop-blur-sm transition-opacity hover:border-primary hover:text-primary group-hover/cell:pointer-events-auto group-hover/cell:opacity-100"
+                aria-label={`Adicionar demanda para ${d.name} em ${sprint.code}`}
+                className="pointer-events-none absolute inset-x-1.5 top-full z-10 mt-0 flex items-center justify-center gap-1 rounded-md border border-dashed border-grid-line bg-surface/90 py-1 text-[11px] text-muted-foreground opacity-0 shadow-card backdrop-blur-sm transition-opacity hover:border-primary hover:text-primary focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/cell:pointer-events-auto group-hover/cell:opacity-100 group-focus-within/cell:pointer-events-auto group-focus-within/cell:opacity-100"
               >
                 <Plus className="size-3" /> demanda
               </button>
@@ -833,7 +836,23 @@ function AllocationChip({
           draggable={canEdit}
           onDragStart={(e) => e.dataTransfer.setData("text/allocation", allocation.id)}
           onClick={onEdit}
-          className={`group/chip relative shrink-0 overflow-hidden rounded-md border-l-[3px] px-2 py-1.5 text-left text-foreground shadow-card transition-opacity ${
+          // Teclado: o card é o gatilho de edição, então precisa ser focável e
+          // acionável por Enter/Espaço (o arrastar continua só com mouse; a
+          // alternativa por teclado é o Sprint/Pessoa do diálogo).
+          role="button"
+          tabIndex={0}
+          aria-label={`Editar demanda: ${allocation.title}`}
+          onKeyDown={(e) => {
+            // Só reage ao foco no próprio card: Enter/Espaço no "Replicar" ou
+            // no link do ticket (filhos) têm a ação nativa deles.
+            if (e.target !== e.currentTarget) return;
+            if (e.key === "Enter" || e.key === " ") {
+              // Sem isto o Espaço também rolaria a página.
+              e.preventDefault();
+              onEdit();
+            }
+          }}
+          className={`group/chip relative shrink-0 overflow-hidden rounded-md border-l-[3px] px-2 py-1.5 text-left text-foreground shadow-card transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
             canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-default"
           } ${washClass} ${accentClass} ${dimmed ? "opacity-25" : ""}`}
         >
@@ -851,7 +870,7 @@ function AllocationChip({
               aria-disabled={isReplicating}
               title={isReplicating ? "Replicando…" : "Replicar na próxima sprint"}
               aria-label={isReplicating ? "Replicando…" : "Replicar na próxima sprint"}
-              className={`absolute right-1 top-1 z-10 rounded p-0.5 text-foreground/60 transition-opacity hover:bg-background/60 hover:text-foreground group-hover/chip:opacity-100 ${
+              className={`absolute right-1 top-1 z-10 rounded p-0.5 text-foreground/60 transition-opacity hover:bg-background/60 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/chip:opacity-100 group-focus-within/chip:opacity-100 ${
                 isReplicating ? "cursor-wait opacity-100" : "opacity-0"
               }`}
             >
