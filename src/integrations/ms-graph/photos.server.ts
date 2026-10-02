@@ -58,11 +58,23 @@ export async function fetchParticipantPhoto(email: string): Promise<string> {
 // com o client do próprio usuário (RLS), sem precisar de service role.
 // A ESCRITA do cache é diferente: a tabela não tem policy de escrita
 // para authenticated (decisão do design — gestão é manual), então um
-// UPDATE com o client do usuário falha por RLS. Nesse caso, degrada
-// graciosamente: a foto ainda é retornada certa pra esta chamada, só o
-// cache no banco não se atualiza (a próxima chamada tenta o Graph de
-// novo) — melhor que a leitura inteira falhar quando não há service
-// role disponível.
+// UPDATE com o client do usuário falha por RLS — e falhava sempre, mesmo
+// em produção, onde a service role existe: nada do cache persistia, o
+// TTL de falha nunca valia e toda abertura da roleta refazia o fetch.
+// Por isso a escrita usa supabaseAdmin quando a service role está no
+// ambiente (produção, ver getCacheWriter) e só cai no client do usuário
+// sem ela (dev local) — aí degrada graciosamente: a foto ainda é
+// retornada certa pra esta chamada, só o cache no banco não se atualiza.
+async function getCacheWriter(userClient: SupabaseClient<Database>) {
+  // Checa o env antes de tocar no supabaseAdmin: o Proxy de
+  // client.server.ts lança (e loga) a cada acesso quando a chave falta.
+  if (!process.env["SUPABASE_URL"] || !process.env["SUPABASE_SERVICE_ROLE_KEY"]) {
+    return withRetroTypes(userClient);
+  }
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return withRetroTypes(supabaseAdmin);
+}
+
 export async function getCachedOrFetchPhoto(
   email: string,
   client: SupabaseClient<Database>,
@@ -87,6 +99,8 @@ export async function getCachedOrFetchPhoto(
   const isFresh = ageMs !== null && ageMs < ttl;
   if (isFresh) return data.photo_data_url;
 
+  const writer = await getCacheWriter(client);
+
   let dataUrl: string;
   try {
     dataUrl = await fetchParticipantPhoto(email);
@@ -97,7 +111,7 @@ export async function getCachedOrFetchPhoto(
     // fadado a falhar, pra sempre, até alguém notar manualmente. Se o
     // client não tiver permissão de escrita (sem service role), markError
     // só é logado — não interrompe a resposta ao usuário.
-    const { error: markError } = await retroClient
+    const { error: markError } = await writer
       .from("retro_participants")
       .update({ photo_fetched_at: new Date().toISOString() })
       .eq("email", email);
@@ -106,13 +120,20 @@ export async function getCachedOrFetchPhoto(
     return data.photo_data_url;
   }
 
-  const { error: updateError } = await retroClient
+  // "Sem foto" do Graph não apaga foto já existente: há fotos gravadas à
+  // mão pelo SQL Editor (gente sem foto no diretório, ou de quando o
+  // Graph estava inacessível) e elas valem mais que o 404. Só renova
+  // photo_fetched_at, para respeitar o TTL de 7 dias.
+  const keepExisting = dataUrl === NO_PHOTO_SENTINEL && !!data.photo_data_url;
+  const newPhoto = keepExisting ? data.photo_data_url : dataUrl;
+
+  const { error: updateError } = await writer
     .from("retro_participants")
-    .update({ photo_data_url: dataUrl, photo_fetched_at: new Date().toISOString() })
+    .update({ photo_data_url: newPhoto, photo_fetched_at: new Date().toISOString() })
     .eq("email", email);
   if (updateError) {
     console.error(`[ms-graph/photos] falha ao gravar cache de ${email}`, updateError);
   }
 
-  return dataUrl;
+  return newPhoto;
 }
