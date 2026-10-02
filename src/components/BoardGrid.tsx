@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -100,10 +100,38 @@ export function BoardGrid({
   const [dragOver, setDragOver] = useState<string | null>(null);
   // Filtros derivados da URL. Sem `ano`, vale o ano corrente do relógio, não o
   // da sprint mais próxima — decisão da spec.
-  const search = filters.q ?? "";
+  const urlQ = filters.q ?? "";
   const statusFilter: AllocationStatus | "todos" = filters.status ?? "todos";
   const tipoFilter: AllocationTipo | "todos" = filters.tipo ?? "todos";
   const yearFilter = filters.ano ?? new Date().getFullYear();
+
+  // O input NÃO é controlado direto pela URL: o router aplica a navegação de
+  // forma assíncrona (transition), então o valor voltaria atrasado e o cursor
+  // pularia para o fim ao editar no meio do texto, perdendo teclas em digitação
+  // rápida. O texto fica em estado local; a URL é só um espelho dele.
+  const [search, setSearch] = useState(urlQ);
+  // Valores que nós mesmos gravaram na URL e que ainda podem chegar de volta
+  // (possivelmente fora de ordem). Não são mudança externa, então não mexem no
+  // texto que o usuário está digitando.
+  const pushedQ = useRef(new Set<string>());
+  const onSearchChange = (text: string) => {
+    setSearch(text);
+    pushedQ.current.add(text.trim() === "" ? "" : text);
+    onFiltersChange({ q: text || undefined });
+  };
+  // Ressincroniza quando `q` muda por fora (link, F5, voltar, reset na troca
+  // de projeto). Só se diferir do texto atual, para não brigar com a digitação.
+  useEffect(() => {
+    if (pushedQ.current.has(urlQ)) {
+      // Chegou o que gravamos; descarta o histórico se for o valor atual.
+      if (urlQ === (search.trim() === "" ? "" : search)) pushedQ.current.clear();
+      return;
+    }
+    pushedQ.current.clear();
+    setSearch(urlQ);
+    // Só reage à URL: `search` é lido apenas para comparar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlQ]);
 
   // As quatro queries são `select("*")` planas com um `.eq("jira_project", …)`
   // cada — sem `!inner`, sem query dependente: `devs` e `allocations` têm o
@@ -348,7 +376,7 @@ export function BoardGrid({
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
-                onChange={(e) => onFiltersChange({ q: e.target.value || undefined })}
+                onChange={(e) => onSearchChange(e.target.value)}
                 placeholder="Buscar demanda ou ticket"
                 className="h-9 w-56 pl-8"
               />

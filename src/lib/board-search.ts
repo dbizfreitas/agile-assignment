@@ -35,8 +35,15 @@ export function parseBoardSearch(search: Record<string, unknown>): BoardSearch {
   if (Number.isInteger(ano) && ano >= ANO_MIN && ano <= ANO_MAX) result.ano = ano;
 
   // Guarda o texto como digitado (sem trim): só descarta se for vazio/espaços.
+  // O router faz JSON.parse: `?q=123` chega como number.
   const rawQ = search["q"];
-  if (typeof rawQ === "string" && rawQ.trim() !== "") result.q = rawQ;
+  const q =
+    typeof rawQ === "string"
+      ? rawQ
+      : typeof rawQ === "number" && Number.isFinite(rawQ)
+        ? String(rawQ)
+        : "";
+  if (q.trim() !== "") result.q = q;
 
   const rawTipo = search["tipo"];
   if (typeof rawTipo === "string") {
