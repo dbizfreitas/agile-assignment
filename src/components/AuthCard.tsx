@@ -62,6 +62,17 @@ export function AuthCard() {
           </div>
         </div>
 
+        <Button type="button" variant="outline" className="w-full" onClick={microsoft} disabled={msBusy || busy}>
+          <MicrosoftIcon />
+          <span className="ml-2">{msBusy ? "Redirecionando..." : "Entrar com Microsoft"}</span>
+        </Button>
+
+        <div className="my-5 flex items-center gap-3 text-xs uppercase text-muted-foreground">
+          <span className="h-px flex-1 bg-border" />
+          ou
+          <span className="h-px flex-1 bg-border" />
+        </div>
+
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="email">E-mail</Label>
