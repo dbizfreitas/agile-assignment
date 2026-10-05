@@ -6,11 +6,32 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { LayoutGrid } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AZURE_RETURN_KEY, AZURE_STATE_KEY, buildAzureAuthorizeUrl } from "@/integrations/azure/config";
+
+function MicrosoftIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 21 21" aria-hidden>
+      <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+    </svg>
+  );
+}
 
 export function AuthCard() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [msBusy, setMsBusy] = useState(false);
+
+  function microsoft() {
+    setMsBusy(true);
+    const state = crypto.randomUUID();
+    sessionStorage.setItem(AZURE_STATE_KEY, state);
+    sessionStorage.setItem(AZURE_RETURN_KEY, window.location.pathname + window.location.search);
+    window.location.href = buildAzureAuthorizeUrl(state);
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,6 +60,17 @@ export function AuthCard() {
           <div className="ml-auto">
             <ThemeToggle />
           </div>
+        </div>
+
+        <Button type="button" variant="outline" className="w-full" onClick={microsoft} disabled={msBusy || busy}>
+          <MicrosoftIcon />
+          <span className="ml-2">{msBusy ? "Redirecionando..." : "Entrar com Microsoft"}</span>
+        </Button>
+
+        <div className="my-5 flex items-center gap-3 text-xs uppercase text-muted-foreground">
+          <span className="h-px flex-1 bg-border" />
+          ou
+          <span className="h-px flex-1 bg-border" />
         </div>
 
         <form onSubmit={submit} className="space-y-4">
@@ -71,7 +103,7 @@ export function AuthCard() {
         </form>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          O acesso é concedido por convite. Fale com um administrador da plataforma.
+          Colaboradores Way2 entram com a conta Microsoft. Usuários já cadastrados podem usar e-mail e senha.
         </p>
       </div>
     </div>

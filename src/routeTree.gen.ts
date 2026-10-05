@@ -17,6 +17,7 @@ import { Route as ShellAlocacoesRouteImport } from './routes/_shell/alocacoes'
 import { Route as ShellCompromissoRouteImport } from './routes/_shell/compromisso'
 import { Route as ShellCycleTimeRouteImport } from './routes/_shell/cycle-time'
 import { Route as ShellRetrospectivasRouteImport } from './routes/_shell/retrospectivas'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as EmbedAlocacoesRouteImport } from './routes/embed.alocacoes'
 
 const ShellRoute = ShellRouteImport.update({
@@ -58,6 +59,11 @@ const ShellRetrospectivasRoute = ShellRetrospectivasRouteImport.update({
   path: '/retrospectivas',
   getParentRoute: () => ShellRoute,
 } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EmbedAlocacoesRoute = EmbedAlocacoesRouteImport.update({
   id: '/embed/alocacoes',
   path: '/embed/alocacoes',
@@ -72,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/compromisso': typeof ShellCompromissoRoute
   '/cycle-time': typeof ShellCycleTimeRoute
   '/retrospectivas': typeof ShellRetrospectivasRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/embed/alocacoes': typeof EmbedAlocacoesRoute
 }
 export interface FileRoutesByTo {
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/compromisso': typeof ShellCompromissoRoute
   '/cycle-time': typeof ShellCycleTimeRoute
   '/retrospectivas': typeof ShellRetrospectivasRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/embed/alocacoes': typeof EmbedAlocacoesRoute
   '/': typeof ShellIndexRoute
 }
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/_shell/compromisso': typeof ShellCompromissoRoute
   '/_shell/cycle-time': typeof ShellCycleTimeRoute
   '/_shell/retrospectivas': typeof ShellRetrospectivasRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/embed/alocacoes': typeof EmbedAlocacoesRoute
   '/_shell/': typeof ShellIndexRoute
 }
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/compromisso'
     | '/cycle-time'
     | '/retrospectivas'
+    | '/auth/callback'
     | '/embed/alocacoes'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -115,6 +125,7 @@ export interface FileRouteTypes {
     | '/compromisso'
     | '/cycle-time'
     | '/retrospectivas'
+    | '/auth/callback'
     | '/embed/alocacoes'
     | '/'
   id:
@@ -126,6 +137,7 @@ export interface FileRouteTypes {
     | '/_shell/compromisso'
     | '/_shell/cycle-time'
     | '/_shell/retrospectivas'
+    | '/auth/callback'
     | '/embed/alocacoes'
     | '/_shell/'
   fileRoutesById: FileRoutesById
@@ -134,6 +146,7 @@ export interface RootRouteChildren {
   ShellRoute: typeof ShellRouteWithChildren
   AceitarConviteRoute: typeof AceitarConviteRoute
   AdminRoute: typeof AdminRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
   EmbedAlocacoesRoute: typeof EmbedAlocacoesRoute
 }
 
@@ -195,6 +208,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShellRetrospectivasRouteImport
       parentRoute: typeof ShellRoute
     }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/embed/alocacoes': {
       id: '/embed/alocacoes'
       path: '/embed/alocacoes'
@@ -227,6 +247,7 @@ const rootRouteChildren: RootRouteChildren = {
   ShellRoute: ShellRouteWithChildren,
   AceitarConviteRoute: AceitarConviteRoute,
   AdminRoute: AdminRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
   EmbedAlocacoesRoute: EmbedAlocacoesRoute,
 }
 export const routeTree = rootRouteImport
