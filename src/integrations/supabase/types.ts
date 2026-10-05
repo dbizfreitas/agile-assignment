@@ -405,6 +405,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      allocation_ticket_urls_valid: {
+        Args: { tickets: Json }
+        Returns: boolean
+      }
       cancel_invitation: { Args: { _email: string }; Returns: undefined }
       create_invitation: {
         Args: {
@@ -436,6 +440,7 @@ export type Database = {
       }
       skip_participant: { Args: { _email: string }; Returns: undefined }
       spin_roulette: { Args: never; Returns: string }
+      ticket_url_is_valid: { Args: { url: string }; Returns: boolean }
       unmark_participant: { Args: { _email: string }; Returns: undefined }
       unskip_participant: { Args: { _email: string }; Returns: undefined }
     }
