@@ -103,7 +103,7 @@ export function AuthCard() {
         </form>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          O acesso é concedido por convite. Fale com um administrador da plataforma.
+          Colaboradores Way2 entram com a conta Microsoft. Usuários já cadastrados podem usar e-mail e senha.
         </p>
       </div>
     </div>
