@@ -6,11 +6,32 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { LayoutGrid } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AZURE_RETURN_KEY, AZURE_STATE_KEY, buildAzureAuthorizeUrl } from "@/integrations/azure/config";
+
+function MicrosoftIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 21 21" aria-hidden>
+      <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+    </svg>
+  );
+}
 
 export function AuthCard() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [msBusy, setMsBusy] = useState(false);
+
+  function microsoft() {
+    setMsBusy(true);
+    const state = crypto.randomUUID();
+    sessionStorage.setItem(AZURE_STATE_KEY, state);
+    sessionStorage.setItem(AZURE_RETURN_KEY, window.location.pathname + window.location.search);
+    window.location.href = buildAzureAuthorizeUrl(state);
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
