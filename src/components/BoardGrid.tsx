@@ -36,6 +36,9 @@ import {
   statusInfo,
   tipoInfo,
   washClassFor,
+  teamMembers,
+  moveInTeam,
+  renumberChanges,
   STATUS_LIST,
   TIPO_LIST,
   type Allocation,
@@ -49,6 +52,7 @@ import {
 import type { BoardSearch } from "@/lib/board-search";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
+import { useReorderDevs } from "@/hooks/use-reorder-devs";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AllocationDialog, toDraft, type AllocationDraft } from "./AllocationDialog";
@@ -60,6 +64,11 @@ import { TeamsDialog } from "./TeamsDialog";
 // horizontal, em vez de espremer os cards até ficarem ilegíveis.
 const SPRINT_COL_MIN_PX = 128;
 const DEV_COL_MIN_PX = 152;
+
+// MIME próprio para arrastar a coluna da pessoa (#83). Separado de
+// "text/allocation" para que o arraste de coluna nunca seja confundido com o de
+// um card, e vice-versa.
+const DEV_COLUMN_MIME = "text/dev-column";
 
 export function BoardGrid({
   canEdit,
@@ -98,6 +107,12 @@ export function BoardGrid({
     sprint: null,
   });
   const [teamsDialog, setTeamsDialog] = useState(false);
+  // Reordenação de colunas por arraste (#83).
+  const [draggingDevId, setDraggingDevId] = useState<string | null>(null);
+  const [columnDrop, setColumnDrop] = useState<{
+    devId: string;
+    side: "before" | "after";
+  } | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   // Filtros derivados da URL. Sem `ano`, vale o ano corrente do relógio, não o
   // da sprint mais próxima — decisão da spec.
@@ -323,6 +338,8 @@ export function BoardGrid({
     }
   };
 
+  const reorderDevs = useReorderDevs(project);
+
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
   const teamPosition = useMemo(() => new Map(teams.map((t, i) => [t.id, i])), [teams]);
 
@@ -525,6 +542,16 @@ export function BoardGrid({
                 {devs.map((d) => {
                   const team = teamById.get(d.team_id);
                   const availability = formatAvailability(d);
+                  const dropSide = columnDrop?.devId === d.id ? columnDrop.side : null;
+                  const clearColumnDrag = () => {
+                    setDraggingDevId(null);
+                    setColumnDrop(null);
+                  };
+                  // Só reordena dentro do mesmo time (#83): a posição é por time.
+                  const sourceInSameTeam = () => {
+                    const src = devsQ.data?.find((x) => x.id === draggingDevId);
+                    return !!src && src.team_id === d.team_id;
+                  };
                   return (
                     <Tooltip key={d.id}>
                       <TooltipTrigger asChild>
@@ -533,9 +560,65 @@ export function BoardGrid({
                             if (!canEdit) return;
                             setDevDialog({ open: true, dev: d });
                           }}
+                          draggable={canEdit && !reorderDevs.isPending}
+                          onDragStart={(e) => {
+                            if (!canEdit) return;
+                            e.dataTransfer.setData(DEV_COLUMN_MIME, d.id);
+                            e.dataTransfer.effectAllowed = "move";
+                            setDraggingDevId(d.id);
+                          }}
+                          onDragOver={(e) => {
+                            if (!canEdit) return;
+                            if (!e.dataTransfer.types.includes(DEV_COLUMN_MIME)) return;
+                            // Sem preventDefault o navegador mostra o cursor de
+                            // "proibido" — é o que queremos em outro time.
+                            if (!sourceInSameTeam()) return;
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = "move";
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const side =
+                              e.clientX < rect.left + rect.width / 2 ? "before" : "after";
+                            if (columnDrop?.devId !== d.id || columnDrop.side !== side) {
+                              setColumnDrop({ devId: d.id, side });
+                            }
+                          }}
+                          onDragLeave={() => {
+                            if (columnDrop?.devId === d.id) setColumnDrop(null);
+                          }}
+                          onDrop={(e) => {
+                            if (!canEdit) return;
+                            e.preventDefault();
+                            const id = e.dataTransfer.getData(DEV_COLUMN_MIME);
+                            const side = columnDrop?.devId === d.id ? columnDrop.side : "before";
+                            clearColumnDrag();
+                            if (!id || id === d.id) return;
+                            const all = devsQ.data ?? [];
+                            const src = all.find((x) => x.id === id);
+                            if (!src || src.team_id !== d.team_id) return;
+                            const members = teamMembers(all, d.team_id);
+                            const without = members.filter((m) => m.id !== id);
+                            const targetIdx = without.findIndex((m) => m.id === d.id);
+                            const toIndex =
+                              targetIdx === -1
+                                ? members.findIndex((m) => m.id === id)
+                                : targetIdx + (side === "after" ? 1 : 0);
+                            const changes = renumberChanges(moveInTeam(members, id, toIndex));
+                            if (changes.length > 0) reorderDevs.mutate({ changes });
+                          }}
+                          onDragEnd={clearColumnDrag}
                           style={{ boxShadow: `inset 0 -3px 0 0 ${team?.color ?? "transparent"}` }}
-                          className="group sticky top-0 z-30 flex items-center gap-2 overflow-hidden border-b border-r border-grid-line bg-surface-2 px-3 py-2 text-left last:border-r-0 hover:bg-secondary"
+                          className={`group sticky top-0 z-30 flex items-center gap-2 overflow-hidden border-b border-r border-grid-line bg-surface-2 px-3 py-2 text-left last:border-r-0 hover:bg-secondary ${
+                            canEdit ? "cursor-grab active:cursor-grabbing" : ""
+                          } ${draggingDevId === d.id ? "opacity-50" : ""}`}
                         >
+                          {dropSide ? (
+                            <span
+                              aria-hidden
+                              className={`pointer-events-none absolute inset-y-0 w-0.5 bg-primary ${
+                                dropSide === "before" ? "left-0" : "right-0"
+                              }`}
+                            />
+                          ) : null}
                           <span
                             className="flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
                             style={{ backgroundColor: team?.color ?? "#94a3b8" }}
@@ -640,6 +723,7 @@ export function BoardGrid({
           allocationCount={
             devDialog.dev ? allocations.filter((a) => a.dev_id === devDialog.dev?.id).length : 0
           }
+          devs={devsQ.data ?? []}
           project={project}
           onOpenChange={(o) => setDevDialog({ open: o, dev: o ? devDialog.dev : null })}
         />
@@ -728,6 +812,8 @@ function SprintRow({
           <div
             key={key}
             onDragOver={(e) => {
+              // Só arraste de card acende a célula; o de coluna (#83) não.
+              if (!e.dataTransfer.types.includes("text/allocation")) return;
               // Sem `preventDefault()` o navegador não marca a célula como
               // alvo válido — é assim que o cursor de "proibido" aparece.
               if (!available) return;

@@ -245,3 +245,36 @@ export function resolveNextSprint(sprints: Sprint[], currentSprintId: string): S
   if (index === -1) return null;
   return sprints[index + 1] ?? null;
 }
+
+/**
+ * Membros de um time na ordem em que as colunas aparecem (#83): `position` e,
+ * no empate, o nome — o mesmo desempate do `.order("position").order("name")`
+ * da query, para que posições duplicadas não mudem a ordem entre telas.
+ */
+export function teamMembers(devs: Dev[], teamId: string): Dev[] {
+  return devs
+    .filter((d) => d.team_id === teamId)
+    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+}
+
+/** Move `devId` para `toIndex` (0-based, limitado a [0, len]) sem mutar a lista (#83). */
+export function moveInTeam(members: Dev[], devId: string, toIndex: number): Dev[] {
+  const moving = members.find((m) => m.id === devId);
+  if (!moving) return members;
+  const rest = members.filter((m) => m.id !== devId);
+  const at = Math.max(0, Math.min(toIndex, rest.length));
+  return [...rest.slice(0, at), moving, ...rest.slice(at)];
+}
+
+/**
+ * Só as linhas cuja `position` difere do índice (#83). Renumerar tudo de 0 a
+ * N-1 também normaliza duplicatas e buracos herdados, e evita escrever em quem
+ * não mudou.
+ */
+export function renumberChanges(ordered: Dev[]): { id: string; position: number }[] {
+  const changes: { id: string; position: number }[] = [];
+  ordered.forEach((d, i) => {
+    if (d.position !== i) changes.push({ id: d.id, position: i });
+  });
+  return changes;
+}
