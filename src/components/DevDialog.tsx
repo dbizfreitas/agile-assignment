@@ -30,9 +30,18 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
-import { TEAM_COLORS, initialsFrom, type Dev, type Team } from "@/lib/board";
+import {
+  TEAM_COLORS,
+  initialsFrom,
+  moveInTeam,
+  renumberChanges,
+  teamMembers,
+  type Dev,
+  type Team,
+} from "@/lib/board";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
+import { useReorderDevs } from "@/hooks/use-reorder-devs";
 import { TeamColorSwatches, TeamSelectOption } from "@/components/TeamPickerControls";
 
 const NEW_TEAM = "__new__";
@@ -46,6 +55,7 @@ export function DevDialog({
   open,
   count,
   allocationCount,
+  devs,
   project,
   onOpenChange,
 }: {
@@ -54,6 +64,8 @@ export function DevDialog({
   count: number;
   /** Nº de demandas da pessoa: apagadas em cascata junto com ela. */
   allocationCount: number;
+  /** Todas as pessoas do projeto (cache do quadro): base da ordem no time (#83). */
+  devs: Dev[];
   project: JiraProjectKey;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -67,6 +79,9 @@ export function DevDialog({
   const [availableFrom, setAvailableFrom] = useState("");
   const [availableTo, setAvailableTo] = useState("");
   const [confirming, setConfirming] = useState(false);
+  // Índice (0-based) escolhido no Select "Posição no time" (#83).
+  const [orderIndex, setOrderIndex] = useState(0);
+  const reorderDevs = useReorderDevs(project);
 
   // MESMA queryKey do BoardGrid, de propósito: chaves diferentes fariam os dois
   // componentes brigarem pela mesma entrada de cache e o diálogo listaria times
@@ -96,6 +111,14 @@ export function DevDialog({
     setNewTeamColor(TEAM_COLORS[teams.length % TEAM_COLORS.length]!);
     setAvailableFrom(dev?.available_from ?? "");
     setAvailableTo(dev?.available_to ?? "");
+    setOrderIndex(
+      dev
+        ? Math.max(
+            0,
+            teamMembers(devs, dev.team_id).findIndex((m) => m.id === dev.id),
+          )
+        : 0,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, dev]);
 
@@ -125,7 +148,6 @@ export function DevDialog({
         name: name.trim(),
         initials: initialsFrom(name),
         team_id: finalTeamId,
-        position: dev?.position ?? count,
         // `|| null` e não a string vazia: `""` em coluna `date` é erro de
         // sintaxe no Postgres, e `null` é o valor que significa "sem
         // restrição" — o mesmo estado de toda pessoa cadastrada antes da
@@ -133,24 +155,57 @@ export function DevDialog({
         available_from: availableFrom || null,
         available_to: availableTo || null,
       };
+      // `position` só vai no insert (#83): reenviá-la no UPDATE gravaria o
+      // snapshot do momento em que o diálogo abriu e desfaria uma reordenação
+      // feita por arraste enquanto ele estava aberto.
       const res = dev
         ? await supabase.from("devs").update(payload).eq("id", dev.id)
         : // `jira_project` é obrigatório no insert; o trigger devs_set_project
           // recalcula a partir do time, então mandar o projeto da tela é
           // apenas o valor correto de partida.
-          await supabase.from("devs").insert({ ...payload, jira_project: project });
+          await supabase
+            .from("devs")
+            .insert({ ...payload, position: count, jira_project: project });
       if (res.error) throw res.error;
+
+      // Reordenação pelo diálogo (#83): só quando o time não mudou e o índice
+      // escolhido difere do atual. Erro vira toast no hook; relança para o
+      // onSuccess não fechar o diálogo.
+      if (dev && finalTeamId === dev.team_id) {
+        const members = teamMembers(devs, dev.team_id);
+        const current = members.findIndex((m) => m.id === dev.id);
+        if (current !== -1 && orderIndex !== current) {
+          const changes = renumberChanges(moveInTeam(members, dev.id, orderIndex));
+          if (changes.length > 0) {
+            try {
+              await reorderDevs.mutateAsync({ changes });
+            } catch (e) {
+              // O hook já mostrou o toast; marca o erro para o onError do
+              // save não duplicá-lo e o diálogo permanecer aberto.
+              throw Object.assign(e instanceof Error ? e : new Error(String(e)), {
+                alreadyReported: true,
+              });
+            }
+          }
+        }
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["board", "devs"] });
       qc.invalidateQueries({ queryKey: ["board", "teams"] });
       onOpenChange(false);
     },
-    onError: (e: Error) => toast.error(boardErrorMessage(e)),
+    onError: (e: Error) => {
+      if ((e as Error & { alreadyReported?: boolean }).alreadyReported) return;
+      toast.error(boardErrorMessage(e));
+    },
   });
 
   // Comparação de strings `YYYY-MM-DD`, mesma técnica de `isDevAvailableInSprint`.
   const windowInverted = Boolean(availableFrom && availableTo && availableTo < availableFrom);
+
+  // Índice atual da pessoa no time, para rotular as opções do Select (#83).
+  const originalIndex = dev ? teamMembers(devs, dev.team_id).findIndex((m) => m.id === dev.id) : -1;
 
   const canSave =
     name.trim().length > 0 &&
@@ -205,6 +260,32 @@ export function DevDialog({
                 </SelectContent>
               </Select>
             </div>
+
+            {dev && teamId === dev.team_id ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="dorder">Posição no time</Label>
+                <Select value={String(orderIndex)} onValueChange={(v) => setOrderIndex(Number(v))}>
+                  <SelectTrigger id="dorder">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teamMembers(devs, dev.team_id).map((m, i) => (
+                      <SelectItem key={m.id} value={String(i)}>
+                        {`${i + 1}º`}
+                        {i !== originalIndex ? ` · lugar de ${m.name}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Alternativa por teclado a arrastar a coluna no quadro.
+                </p>
+              </div>
+            ) : dev ? (
+              <p className="text-xs text-muted-foreground">
+                A posição no novo time pode ser ajustada arrastando a coluna.
+              </p>
+            ) : null}
 
             {teamId === NEW_TEAM ? (
               <div className="space-y-4 rounded-lg border border-dashed border-grid-line p-3">
