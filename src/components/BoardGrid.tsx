@@ -830,7 +830,7 @@ function SprintRow({
               available ? "" : "cursor-not-allowed bg-muted-foreground/15"
             } ${dragOver === key ? "bg-primary/10 ring-1 ring-inset ring-primary" : ""}`}
           >
-            <div className="flex min-h-full w-full flex-col gap-1">
+            <div className="flex w-full flex-1 flex-col gap-1">
               {items.map((a) => (
                 <AllocationChip
                   key={a.id}
@@ -962,9 +962,10 @@ function AllocationChip({
               onEdit();
             }
           }}
+          // Card único: cresce (flex-1) para ocupar toda a altura da célula.
           className={`group/chip relative shrink-0 overflow-hidden rounded-md border-l-[3px] px-2 py-1.5 text-left text-foreground shadow-card transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
             canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-default"
-          } ${washClass} ${accentClass} ${dimmed ? "opacity-25" : ""}`}
+          } ${allowWrap ? "flex-1" : ""} ${washClass} ${accentClass} ${dimmed ? "opacity-25" : ""}`}
         >
           {canEdit ? (
             <button
