@@ -695,8 +695,6 @@ export function BoardGrid({
         <AllocationDialog
           draft={draft}
           project={project}
-          sprints={sprints}
-          devs={devs}
           onOpenChange={(o) => !o && setDraft(null)}
           onReplicate={
             draft?.id
