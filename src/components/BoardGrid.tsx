@@ -25,6 +25,8 @@ import {
 import {
   accentClassFor,
   chipClassFor,
+  clampWeeksToSprint,
+  compareAllocations,
   formatAvailability,
   formatRange,
   getSprintYear,
@@ -32,10 +34,13 @@ import {
   isDevAvailableInSprint,
   normalizeSearchText,
   resolveNextSprint,
+  sameWeeks,
   sanitizeTickets,
+  sprintWeeks,
   statusInfo,
   tipoInfo,
   washClassFor,
+  weekBadge,
   teamMembers,
   moveInTeam,
   renumberChanges,
@@ -53,6 +58,7 @@ import type { BoardSearch } from "@/lib/board-search";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
 import { useReorderDevs } from "@/hooks/use-reorder-devs";
+import { useReorderAllocations } from "@/hooks/use-reorder-allocations";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AllocationDialog, toDraft, type AllocationDraft } from "./AllocationDialog";
@@ -69,6 +75,23 @@ const DEV_COL_MIN_PX = 152;
 // "text/allocation" para que o arraste de coluna nunca seja confundido com o de
 // um card, e vice-versa.
 const DEV_COLUMN_MIME = "text/dev-column";
+
+// Faixa mínima de cada semana quando a sprint tem cards com semana (#91). Baixa
+// de propósito: semana vazia deve ocupar pouco espaço, e as faixas com card
+// crescem pelo conteúdo.
+const WEEK_BAND_MIN_PX = 30;
+
+type CardDnd = {
+  /** Lado do indicador de soltar neste card, ou `null` se ele não é o alvo. */
+  dropSide: (id: string) => "before" | "after" | null;
+  start: (a: Allocation) => void;
+  end: () => void;
+  /** O card arrastado agora vem desta célula? (então soltar na célula não faz nada) */
+  fromCell: (sprintId: string, devId: string) => boolean;
+  over: (e: React.DragEvent<HTMLElement>, target: Allocation) => void;
+  leave: (e: React.DragEvent<HTMLElement>, target: Allocation) => void;
+  drop: (e: React.DragEvent<HTMLElement>, target: Allocation) => void;
+};
 
 export function BoardGrid({
   canEdit,
@@ -114,6 +137,14 @@ export function BoardGrid({
     side: "before" | "after";
   } | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  // Reordenação de cards dentro da célula (#91). O card arrastado fica num ref
+  // porque `dataTransfer.getData` não é legível durante o `dragover`; o
+  // indicador (linha acima/abaixo do alvo) é estado, pois precisa renderizar.
+  const draggingAllocation = useRef<Allocation | null>(null);
+  const [cardDrop, setCardDrop] = useState<{
+    id: string;
+    side: "before" | "after";
+  } | null>(null);
   // Filtros derivados da URL. Sem `ano`, vale o ano corrente do relógio, não o
   // da sprint mais próxima — decisão da spec.
   const urlQ = filters.q ?? "";
@@ -237,13 +268,26 @@ export function BoardGrid({
 
   const allocations = allocQ.data ?? [];
 
-  // Sem mudança no payload: o projeto do cartão é recalculado pelo trigger a
-  // cada movimento, e allocations_sprint_project_fkey valida o destino.
+  // O projeto do cartão é recalculado pelo trigger a cada movimento, e
+  // allocations_sprint_project_fkey valida o destino. As semanas vêm cortadas
+  // para a sprint de destino (#91): a final além da última vira a última, e sem
+  // a inicial o card fica sem semana.
   const move = useMutation({
-    mutationFn: async (v: { id: string; sprint_id: string; dev_id: string }) => {
+    mutationFn: async (v: {
+      id: string;
+      sprint_id: string;
+      dev_id: string;
+      week_start: number | null;
+      week_end: number | null;
+    }) => {
       const { error } = await supabase
         .from("allocations")
-        .update({ sprint_id: v.sprint_id, dev_id: v.dev_id })
+        .update({
+          sprint_id: v.sprint_id,
+          dev_id: v.dev_id,
+          week_start: v.week_start,
+          week_end: v.week_end,
+        })
         .eq("id", v.id);
       if (error) throw error;
     },
@@ -295,6 +339,8 @@ export function BoardGrid({
         status: allocation.status,
         tipo: allocation.tipo,
         notes: allocation.notes,
+        // Semanas mantidas se existirem na sprint de destino (#91).
+        ...clampWeeksToSprint(allocation, nextSprint),
         position,
         jira_project: project,
       });
@@ -339,6 +385,7 @@ export function BoardGrid({
   };
 
   const reorderDevs = useReorderDevs(project);
+  const reorderAllocations = useReorderAllocations(project);
 
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
   const teamPosition = useMemo(() => new Map(teams.map((t, i) => [t.id, i])), [teams]);
@@ -372,6 +419,8 @@ export function BoardGrid({
       list.push(a);
       map.set(key, list);
     }
+    // Ordem da célula (#91): semana inicial, semana final, `position`.
+    for (const list of map.values()) list.sort(compareAllocations);
     return map;
   }, [allocations]);
 
@@ -379,6 +428,83 @@ export function BoardGrid({
     () => new Set(allocations.map((a) => a.sprint_id)),
     [allocations],
   );
+
+  // Layout por semanas (#91): sprint com pelo menos um card com semana (já
+  // cortada ao tamanho atual da sprint) vira W faixas + 1 faixa "sem semana".
+  // Calculado sobre TODOS os cards, não só os que passam no filtro — a busca
+  // não deve rearrumar a altura das linhas.
+  const sprintLayout = useMemo(() => {
+    const map = new Map<string, { weekCount: number; hasWeeked: boolean }>();
+    const byId = new Map(sprintsInYear.map((s) => [s.id, s]));
+    for (const s of sprintsInYear) {
+      map.set(s.id, { weekCount: sprintWeeks(s).length, hasWeeked: false });
+    }
+    for (const a of allocations) {
+      const info = map.get(a.sprint_id);
+      const sprint = byId.get(a.sprint_id);
+      if (!info || !sprint || info.hasWeeked) continue;
+      if (clampWeeksToSprint(a, sprint).week_start != null) info.hasWeeked = true;
+    }
+    return map;
+  }, [sprintsInYear, allocations]);
+
+  // Arraste de card sobre outro card da MESMA célula e mesmas semanas = reordenar
+  // (#91). Qualquer outro caso não é tratado aqui e borbulha para a célula, que
+  // segue a lógica de mover.
+  const cardDnd: CardDnd = {
+    dropSide: (id) => (cardDrop?.id === id ? cardDrop.side : null),
+    start: (a) => {
+      draggingAllocation.current = a;
+    },
+    end: () => {
+      draggingAllocation.current = null;
+      setCardDrop(null);
+    },
+    fromCell: (sprintId, devId) => {
+      const a = draggingAllocation.current;
+      return !!a && a.sprint_id === sprintId && a.dev_id === devId;
+    },
+    over: (e, target) => {
+      const src = draggingAllocation.current;
+      // Durante a gravação não reordena: as posições em cache ainda são
+      // otimistas. Arrastar entre células continua liberado.
+      if (!canEdit || reorderAllocations.isPending || !src || src.id === target.id) return;
+      if (src.sprint_id !== target.sprint_id || src.dev_id !== target.dev_id) return;
+      if (!sameWeeks(src, target)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "move";
+      const rect = e.currentTarget.getBoundingClientRect();
+      const side = e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+      if (cardDrop?.id !== target.id || cardDrop.side !== side) {
+        setCardDrop({ id: target.id, side });
+      }
+    },
+    leave: (e, target) => {
+      // Passar para um filho do próprio card também dispara dragleave.
+      if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+      if (cardDrop?.id === target.id) setCardDrop(null);
+    },
+    drop: (e, target) => {
+      if (!cardDrop || cardDrop.id !== target.id) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const side = cardDrop.side;
+      setCardDrop(null);
+      const src = draggingAllocation.current;
+      draggingAllocation.current = null;
+      if (!src) return;
+      const cell = (byCell.get(`${target.sprint_id}:${target.dev_id}`) ?? []).filter(
+        (a) => a.id !== src.id,
+      );
+      const at = cell.findIndex((a) => a.id === target.id);
+      if (at === -1) return;
+      cell.splice(at + (side === "after" ? 1 : 0), 0, src);
+      // Renumera a célula inteira: normaliza duplicatas e buracos herdados.
+      const changes = renumberChanges(cell);
+      if (changes.length > 0) reorderAllocations.mutate({ changes });
+    },
+  };
 
   const loading = devsQ.isLoading || teamsQ.isLoading || sprintsQ.isLoading || allocQ.isLoading;
 
@@ -530,9 +656,13 @@ export function BoardGrid({
                   gridTemplateColumns: `minmax(${SPRINT_COL_MIN_PX}px, 1fr) repeat(${devs.length}, minmax(${DEV_COL_MIN_PX}px, 1fr))`,
                   gridTemplateRows: [
                     "auto",
-                    ...sprintsInYear.map((s) =>
-                      sprintsWithCards.has(s.id) ? "minmax(104px, auto)" : "auto",
-                    ),
+                    ...sprintsInYear.map((s) => {
+                      const layout = sprintLayout.get(s.id);
+                      if (layout?.hasWeeked) {
+                        return `repeat(${layout.weekCount}, minmax(${WEEK_BAND_MIN_PX}px, auto)) auto`;
+                      }
+                      return sprintsWithCards.has(s.id) ? "minmax(104px, auto)" : "auto";
+                    }),
                   ].join(" "),
                 }}
               >
@@ -652,6 +782,9 @@ export function BoardGrid({
                     sprint={s}
                     devs={devs}
                     byCell={byCell}
+                    weekCount={sprintLayout.get(s.id)?.weekCount ?? 0}
+                    hasWeeked={sprintLayout.get(s.id)?.hasWeeked ?? false}
+                    cardDnd={cardDnd}
                     matches={matches}
                     dragOver={dragOver}
                     setDragOver={setDragOver}
@@ -679,7 +812,16 @@ export function BoardGrid({
                     }}
                     onDrop={(id, devId) => {
                       if (!canEdit) return;
-                      move.mutate({ id, sprint_id: s.id, dev_id: devId });
+                      const allocation = allocations.find((a) => a.id === id);
+                      if (!allocation) return;
+                      // Soltar na própria célula não move nada (#91).
+                      if (allocation.sprint_id === s.id && allocation.dev_id === devId) return;
+                      move.mutate({
+                        id,
+                        sprint_id: s.id,
+                        dev_id: devId,
+                        ...clampWeeksToSprint(allocation, s),
+                      });
                     }}
                     replicatingIds={replicatingSet}
                   />
@@ -694,6 +836,7 @@ export function BoardGrid({
             diálogo sem motivo. */}
         <AllocationDialog
           draft={draft}
+          sprint={sprints.find((s) => s.id === draft?.sprint_id) ?? null}
           project={project}
           onOpenChange={(o) => !o && setDraft(null)}
           onReplicate={
@@ -748,6 +891,9 @@ function SprintRow({
   sprint,
   devs,
   byCell,
+  weekCount,
+  hasWeeked,
+  cardDnd,
   matches,
   dragOver,
   setDragOver,
@@ -762,6 +908,11 @@ function SprintRow({
   sprint: Sprint;
   devs: Dev[];
   byCell: Map<string, Allocation[]>;
+  /** Nº de semanas da sprint (W). */
+  weekCount: number;
+  /** Algum card da sprint tem semana: a linha vira W faixas + "sem semana". */
+  hasWeeked: boolean;
+  cardDnd: CardDnd;
   matches: (a: Allocation) => boolean;
   dragOver: string | null;
   setDragOver: (v: string | null) => void;
@@ -773,10 +924,15 @@ function SprintRow({
   onDrop: (allocationId: string, devId: string) => void;
   replicatingIds: ReadonlySet<string>;
 }) {
+  // Com semanas, o botão da sprint e cada célula cobrem as W+1 linhas da grade
+  // externa (#91); as células viram subgrid para que a mesma semana tenha a
+  // mesma altura em todas as pessoas.
+  const spanStyle = hasWeeked ? { gridRow: `span ${weekCount + 1}` } : undefined;
   return (
     <>
       <button
         onClick={onEditSprint}
+        style={spanStyle}
         title={[sprint.quarter, sprint.code, formatRange(sprint.start_date, sprint.end_date)]
           .filter(Boolean)
           .join(" · ")}
@@ -806,12 +962,88 @@ function SprintRow({
         // abrem no diálogo e podem ser arrastados PARA FORA — que é a ação
         // que corrige a inconsistência.
         const available = isDevAvailableInSprint(d, sprint);
+
+        const renderChip = (a: Allocation, fill: boolean) => (
+          <AllocationChip
+            key={a.id}
+            allocation={a}
+            dimmed={!matches(a)}
+            allowWrap={items.length === 1}
+            fill={fill}
+            canEdit={canEdit}
+            dnd={cardDnd}
+            onEdit={() => onEdit(a)}
+            onReplicate={() => onReplicate(a)}
+            isReplicating={replicatingIds.has(a.id)}
+          />
+        );
+
+        let body: React.ReactNode;
+        if (!hasWeeked) {
+          body = (
+            <div className="flex w-full flex-1 flex-col gap-1">
+              {items.map((a) => renderChip(a, items.length === 1))}
+            </div>
+          );
+        } else {
+          // Semana já cortada ao tamanho atual da sprint (pode ter sido
+          // encurtada depois de o card ser salvo).
+          const placed = items.map((a) => ({ a, w: clampWeeksToSprint(a, sprint) }));
+          const weeked = placed.filter((p) => p.w.week_start != null);
+          if (weeked.length === 0) {
+            // Célula sem semana mantém o layout de antes, ocupando todas as faixas.
+            body = (
+              <div className="flex min-w-0 flex-col gap-1" style={{ gridRow: "1 / -1" }}>
+                {items.map((a) => renderChip(a, items.length === 1))}
+              </div>
+            );
+          } else {
+            const groups = new Map<number, { a: Allocation; end: number }[]>();
+            for (const { a, w } of weeked) {
+              const list = groups.get(w.week_start!) ?? [];
+              list.push({ a, end: w.week_end ?? w.week_start! });
+              groups.set(w.week_start!, list);
+            }
+            const starts = [...groups.keys()].sort((x, y) => x - y);
+            const unweeked = placed.filter((p) => p.w.week_start == null);
+            body = (
+              <>
+                {starts.map((k, i) => {
+                  const list = groups.get(k)!;
+                  // A área do grupo vai da semana inicial até a final mais
+                  // distante, mas nunca invade o grupo seguinte.
+                  const next = starts[i + 1] ?? weekCount + 1;
+                  const end = Math.min(Math.max(...list.map((x) => x.end)), next - 1);
+                  return (
+                    <div
+                      key={k}
+                      className="flex min-h-0 min-w-0 flex-col gap-1 pb-1"
+                      style={{ gridRow: `${k} / ${end + 1}` }}
+                    >
+                      {/* O último card estica para ocupar as faixas do grupo. */}
+                      {list.map((x, j) => renderChip(x.a, j === list.length - 1))}
+                    </div>
+                  );
+                })}
+                {unweeked.length > 0 ? (
+                  <div className="flex min-w-0 flex-col gap-1" style={{ gridRow: weekCount + 1 }}>
+                    {unweeked.map((x) => renderChip(x.a, false))}
+                  </div>
+                ) : null}
+              </>
+            );
+          }
+        }
+
         return (
           <div
             key={key}
             onDragOver={(e) => {
               // Só arraste de card acende a célula; o de coluna (#83) não.
               if (!e.dataTransfer.types.includes("text/allocation")) return;
+              // Card da própria célula: soltar aqui não move nada, então não
+              // acende nem aceita (#91) — a reordenação é sobre os outros cards.
+              if (cardDnd.fromCell(sprint.id, d.id)) return;
               // Sem `preventDefault()` o navegador não marca a célula como
               // alvo válido — é assim que o cursor de "proibido" aparece.
               if (!available) return;
@@ -826,24 +1058,23 @@ function SprintRow({
               const id = e.dataTransfer.getData("text/allocation");
               if (id) onDrop(id, d.id);
             }}
-            className={`group/cell relative flex flex-col gap-1 border-b border-r border-grid-line p-1.5 last:border-r-0 ${
-              available ? "" : "cursor-not-allowed bg-muted-foreground/15"
-            } ${dragOver === key ? "bg-primary/10 ring-1 ring-inset ring-primary" : ""}`}
+            style={
+              hasWeeked ? {
+                    ...spanStyle,
+                    display: "grid",
+                    gridTemplateRows: "subgrid",
+                    // Coluna única limitada: sem isto a coluna implícita (auto) cresce até o
+                    // min-content e notas/tickets longos vazam sobre as colunas vizinhas.
+                    gridTemplateColumns: "minmax(0, 1fr)",
+                  } : undefined
+            }
+            className={`group/cell relative border-b border-r border-grid-line p-1.5 last:border-r-0 ${
+              hasWeeked ? "" : "flex flex-col gap-1"
+            } ${available ? "" : "cursor-not-allowed bg-muted-foreground/15"} ${
+              dragOver === key ? "bg-primary/10 ring-1 ring-inset ring-primary" : ""
+            }`}
           >
-            <div className="flex w-full flex-1 flex-col gap-1">
-              {items.map((a) => (
-                <AllocationChip
-                  key={a.id}
-                  allocation={a}
-                  dimmed={!matches(a)}
-                  allowWrap={items.length === 1}
-                  canEdit={canEdit}
-                  onEdit={() => onEdit(a)}
-                  onReplicate={() => onReplicate(a)}
-                  isReplicating={replicatingIds.has(a.id)}
-                />
-              ))}
-            </div>
+            {body}
             {/* :focus-visible em vez de focus-within: foco por clique (ex.: após replicar) não deve manter o botão visível */}
             {canEdit && available ? (
               <button
@@ -921,15 +1152,21 @@ function AllocationChip({
   allocation,
   dimmed,
   allowWrap,
+  fill,
   canEdit,
+  dnd,
   onEdit,
   onReplicate,
   isReplicating,
 }: {
   allocation: Allocation;
   dimmed: boolean;
+  /** Texto até 4 linhas + tickets: só quando é o único card da célula. */
   allowWrap: boolean;
+  /** Estica (flex-1) para ocupar a altura que sobra no contêiner. */
+  fill: boolean;
   canEdit: boolean;
+  dnd: CardDnd;
   onEdit: () => void;
   onReplicate: () => void;
   isReplicating: boolean;
@@ -937,6 +1174,8 @@ function AllocationChip({
   const chipClass = chipClassFor(allocation);
   const washClass = washClassFor(allocation);
   const accentClass = accentClassFor(allocation);
+  const badge = weekBadge(allocation);
+  const dropSide = dnd.dropSide(allocation.id);
   return (
     <HoverCard openDelay={300}>
       <HoverCardTrigger asChild>
@@ -945,7 +1184,14 @@ function AllocationChip({
             card na mesma célula. */}
         <div
           draggable={canEdit}
-          onDragStart={(e) => e.dataTransfer.setData("text/allocation", allocation.id)}
+          onDragStart={(e) => {
+            e.dataTransfer.setData("text/allocation", allocation.id);
+            dnd.start(allocation);
+          }}
+          onDragEnd={dnd.end}
+          onDragOver={(e) => dnd.over(e, allocation)}
+          onDragLeave={(e) => dnd.leave(e, allocation)}
+          onDrop={(e) => dnd.drop(e, allocation)}
           onClick={onEdit}
           // Teclado: o card é o gatilho de edição, então precisa ser focável e
           // acionável por Enter/Espaço (o arrastar continua só com mouse; a
@@ -963,11 +1209,33 @@ function AllocationChip({
               onEdit();
             }
           }}
-          // Card único: cresce (flex-1) para ocupar toda a altura da célula.
+          // `fill`: cresce (flex-1) para ocupar a altura que sobra (card único da
+          // célula, ou último card do grupo de semanas).
           className={`group/chip relative shrink-0 overflow-hidden rounded-md border-l-[3px] px-2 py-1.5 text-left text-foreground shadow-card transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
             canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-default"
-          } ${allowWrap ? "flex-1" : ""} ${washClass} ${accentClass} ${dimmed ? "opacity-25" : ""}`}
+          } ${fill ? "flex-1" : ""} ${washClass} ${accentClass} ${dimmed ? "opacity-25" : ""}`}
         >
+          {dropSide ? (
+            <span
+              aria-hidden
+              className={`pointer-events-none absolute inset-x-0 z-20 h-0.5 bg-primary ${
+                dropSide === "before" ? "top-0" : "bottom-0"
+              }`}
+            />
+          ) : null}
+          {badge ? (
+            // Some no hover do card quando editável: o botão de replicar ocupa o
+            // mesmo canto.
+            <span
+              className={`pointer-events-none absolute right-1.5 top-1 text-[10px] font-medium tabular-nums text-foreground/50 transition-opacity ${
+                canEdit
+                  ? "group-hover/chip:opacity-0 group-has-[:focus-visible]/chip:opacity-0"
+                  : ""
+              }`}
+            >
+              {badge}
+            </span>
+          ) : null}
           {canEdit ? (
             <button
               onClick={(e) => {
@@ -994,7 +1262,7 @@ function AllocationChip({
             </button>
           ) : null}
           <p
-            className={`text-xs font-medium leading-snug ${allowWrap ? "line-clamp-4" : "line-clamp-2"} ${canEdit ? "pr-4" : ""}`}
+            className={`text-xs font-medium leading-snug ${allowWrap ? "line-clamp-4" : "line-clamp-2"} ${badge ? "pr-9" : canEdit ? "pr-4" : ""}`}
           >
             {allocation.title}
           </p>
@@ -1034,6 +1302,11 @@ function AllocationChip({
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${chipClass}`}>
             {tipoInfo(allocation.tipo).label}
           </span>
+          {badge ? (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+              {badge}
+            </span>
+          ) : null}
         </div>
         <TicketSummary tickets={allocation.tickets} className="text-xs" showAll />
         <p className="text-sm font-medium leading-snug">{allocation.title}</p>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -34,11 +34,15 @@ import { Copy, Plus, Trash2 } from "lucide-react";
 import {
   STATUS_LIST,
   TIPO_LIST,
+  clampWeeksToSprint,
   hasSpecStatus,
+  sprintWeeks,
+  weekLabel,
   type Allocation,
   type AllocationStatus,
   type AllocationTicket,
   type AllocationTipo,
+  type Sprint,
 } from "@/lib/board";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
@@ -64,10 +68,16 @@ export type AllocationDraft = {
   status?: AllocationStatus;
   tipo?: AllocationTipo;
   notes?: string | null;
+  week_start?: number | null;
+  week_end?: number | null;
 };
+
+// O Radix Select não aceita `value=""`, então "Sem semana" usa um sentinela.
+const NO_WEEK = "none";
 
 export function AllocationDialog({
   draft,
+  sprint,
   project,
   onOpenChange,
   onReplicate,
@@ -75,6 +85,8 @@ export function AllocationDialog({
   isReplicating,
 }: {
   draft: AllocationDraft | null;
+  /** Sprint do draft (#91): dela vêm as semanas oferecidas. `null` sem draft. */
+  sprint: Sprint | null;
   /** Obrigatório no insert; o cartão nasce no projeto da tela. */
   project: JiraProjectKey;
   onOpenChange: (open: boolean) => void;
@@ -92,6 +104,8 @@ export function AllocationDialog({
   const [status, setStatus] = useState<AllocationStatus>("nao_especificada");
   const [tipo, setTipo] = useState<AllocationTipo>("planejado");
   const [notes, setNotes] = useState("");
+  const [weekStart, setWeekStart] = useState<number | null>(null);
+  const [weekEnd, setWeekEnd] = useState<number | null>(null);
   const [confirming, setConfirming] = useState(false);
   const ticketsListRef = useRef<HTMLDivElement>(null);
   const prevTicketsCount = useRef(0);
@@ -105,11 +119,38 @@ export function AllocationDialog({
     setStatus(draft.status ?? "nao_especificada");
     setTipo(draft.tipo ?? "planejado");
     setNotes(draft.notes ?? "");
+    // Sprint editada depois pode ter menos semanas que o card guarda: exibe o
+    // valor já cortado (salvar grava o cortado).
+    const weeks = sprint
+      ? clampWeeksToSprint(
+          { week_start: draft.week_start ?? null, week_end: draft.week_end ?? null },
+          sprint,
+        )
+      : { week_start: draft.week_start ?? null, week_end: draft.week_end ?? null };
+    setWeekStart(weeks.week_start);
+    setWeekEnd(weeks.week_start == null ? null : (weeks.week_end ?? weeks.week_start));
     // Evita que o carregamento inicial dos tickets do draft seja lido como
     // "linha adicionada" pelo efeito de auto-scroll abaixo (abrir uma demanda
     // com vários tickets já deve mostrar do topo, não pular pro último).
     prevTicketsCount.current = (draft.tickets ?? []).length;
+    // `sprint` entra só para o corte inicial; reexecutar quando ele muda
+    // (refetch em segundo plano) apagaria a edição em andamento.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft]);
+
+  const weeks = useMemo(() => (sprint ? sprintWeeks(sprint) : []), [sprint]);
+
+  const onWeekStartChange = (v: string) => {
+    if (v === NO_WEEK) {
+      setWeekStart(null);
+      setWeekEnd(null);
+      return;
+    }
+    const n = Number(v);
+    setWeekStart(n);
+    // Final vazia ou menor que a nova inicial: acompanha a inicial.
+    if (weekEnd == null || weekEnd < n) setWeekEnd(n);
+  };
 
   // Rola para o final da lista sempre que uma linha é ADICIONADA (digitar +
   // Ticket, ou colar vários de uma vez) — a mais recente fica sempre visível,
@@ -230,6 +271,8 @@ export function AllocationDialog({
         status,
         tipo,
         notes: notes.trim() || null,
+        week_start: weekStart,
+        week_end: weekStart == null ? null : (weekEnd ?? weekStart),
       };
       const res = draft.id
         ? await supabase.from("allocations").update(payload).eq("id", draft.id)
@@ -262,6 +305,9 @@ export function AllocationDialog({
     if (status !== (draft.status ?? "nao_especificada")) return true;
     if (tipo !== (draft.tipo ?? "planejado")) return true;
     if ((notes.trim() || null) !== (draft.notes ?? null)) return true;
+    if (weekStart !== (draft.week_start ?? null)) return true;
+    if (weekStart != null && (weekEnd ?? weekStart) !== (draft.week_end ?? draft.week_start))
+      return true;
     const a = normalizedTickets(tickets);
     const b = normalizedTickets(draft.tickets ?? []);
     if (a.length !== b.length) return true;
@@ -351,6 +397,53 @@ export function AllocationDialog({
                 </Select>
               </div>
             </div>
+
+            {weeks.length > 0 ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="alloc-week-start">Semana inicial</Label>
+                  <Select
+                    value={weekStart == null ? NO_WEEK : String(weekStart)}
+                    onValueChange={onWeekStartChange}
+                  >
+                    <SelectTrigger id="alloc-week-start">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_WEEK}>Sem semana</SelectItem>
+                      {weeks.map((w) => (
+                        <SelectItem key={w.number} value={String(w.number)}>
+                          {weekLabel(w)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="alloc-week-end">Semana final</Label>
+                  {/* Sem inicial não há o que terminar: desabilita. Só lista
+                      semanas >= inicial (final nunca antes da inicial). */}
+                  <Select
+                    value={weekStart == null ? "" : String(weekEnd ?? weekStart)}
+                    onValueChange={(v) => setWeekEnd(Number(v))}
+                    disabled={weekStart == null}
+                  >
+                    <SelectTrigger id="alloc-week-end">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {weeks
+                        .filter((w) => weekStart != null && w.number >= weekStart)
+                        .map((w) => (
+                          <SelectItem key={w.number} value={String(w.number)}>
+                            {weekLabel(w)}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            ) : null}
 
             <div className="space-y-1.5">
               <Label>Tickets</Label>
@@ -579,5 +672,7 @@ export function toDraft(a: Allocation): AllocationDraft {
     status: a.status,
     tipo: a.tipo,
     notes: a.notes,
+    week_start: a.week_start,
+    week_end: a.week_end,
   };
 }

@@ -28,6 +28,8 @@ export type Database = {
           tipo: Database["public"]["Enums"]["allocation_tipo"]
           title: string
           updated_at: string
+          week_end: number | null
+          week_start: number | null
         }
         Insert: {
           created_at?: string
@@ -42,6 +44,8 @@ export type Database = {
           tipo?: Database["public"]["Enums"]["allocation_tipo"]
           title: string
           updated_at?: string
+          week_end?: number | null
+          week_start?: number | null
         }
         Update: {
           created_at?: string
@@ -56,6 +60,8 @@ export type Database = {
           tipo?: Database["public"]["Enums"]["allocation_tipo"]
           title?: string
           updated_at?: string
+          week_end?: number | null
+          week_start?: number | null
         }
         Relationships: [
           {

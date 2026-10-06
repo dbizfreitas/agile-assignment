@@ -60,6 +60,12 @@ export type Allocation = {
   notes: string | null;
   position: number;
   jira_project: JiraProjectKey;
+  /**
+   * Intervalo contínuo de semanas da sprint (#91), 1-based. Ambos nulos = sem
+   * semana; `week_end` nulo com `week_start` preenchido = uma semana só.
+   */
+  week_start: number | null;
+  week_end: number | null;
 };
 
 /**
@@ -271,10 +277,117 @@ export function moveInTeam(members: Dev[], devId: string, toIndex: number): Dev[
  * N-1 também normaliza duplicatas e buracos herdados, e evita escrever em quem
  * não mudou.
  */
-export function renumberChanges(ordered: Dev[]): { id: string; position: number }[] {
+export function renumberChanges<T extends { id: string; position: number }>(
+  ordered: T[],
+): { id: string; position: number }[] {
   const changes: { id: string; position: number }[] = [];
   ordered.forEach((d, i) => {
     if (d.position !== i) changes.push({ id: d.id, position: i });
   });
   return changes;
+}
+
+export type SprintWeek = {
+  number: number;
+  /** `YYYY-MM-DD`. */
+  start: string;
+  /** `YYYY-MM-DD`; a última semana pode ser mais curta que 7 dias. */
+  end: string;
+};
+
+const DAY_MS = 86_400_000;
+
+// Aritmética de data em UTC puro (ver `formatDate`): `new Date("2026-10-05")`
+// é meia-noite UTC e o fuso local poderia deslocar o dia.
+function isoToDayNumber(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  return Date.UTC(y!, m! - 1, d!) / DAY_MS;
+}
+
+function dayNumberToIso(day: number): string {
+  return new Date(day * DAY_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * Semanas da sprint (#91): a n-ésima começa em `start + 7(n−1)` dias e vai até
+ * `start + 7n − 1`, limitada ao fim da sprint — período que não é múltiplo de
+ * 7 deixa a última semana mais curta. Datas inválidas ou fim antes do início
+ * resultam em lista vazia.
+ */
+export function sprintWeeks(sprint: Pick<Sprint, "start_date" | "end_date">): SprintWeek[] {
+  const start = isoToDayNumber(sprint.start_date);
+  const end = isoToDayNumber(sprint.end_date);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return [];
+  const count = Math.ceil((end - start + 1) / 7);
+  return Array.from({ length: count }, (_, i) => ({
+    number: i + 1,
+    start: dayNumberToIso(start + 7 * i),
+    end: dayNumberToIso(Math.min(start + 7 * (i + 1) - 1, end)),
+  }));
+}
+
+const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+
+/**
+ * `1ª semana · 05/10 – 09/10`. O intervalo mostra só os dias úteis (início +
+ * 4 dias, limitado ao fim da sprint); a semana continua tendo 7 dias para
+ * efeito de cálculo.
+ */
+export function weekLabel(week: SprintWeek): string {
+  const lastShown = dayNumberToIso(
+    Math.min(isoToDayNumber(week.start) + 4, isoToDayNumber(week.end)),
+  );
+  return `${week.number}ª semana · ${ddmm(week.start)} – ${ddmm(lastShown)}`;
+}
+
+/** Marcador do card: `S1`, `S1–S2`, ou `null` sem semana. */
+export function weekBadge(a: Pick<Allocation, "week_start" | "week_end">): string | null {
+  if (a.week_start == null) return null;
+  const end = a.week_end ?? a.week_start;
+  return end === a.week_start ? `S${a.week_start}` : `S${a.week_start}–S${end}`;
+}
+
+/**
+ * Ordem dos cards na célula (#91): semana inicial (sem semana por último),
+ * depois semana final efetiva (a que termina antes vem primeiro) e por fim a
+ * ordem manual (`position`).
+ */
+export function compareAllocations(
+  a: Pick<Allocation, "week_start" | "week_end" | "position">,
+  b: Pick<Allocation, "week_start" | "week_end" | "position">,
+): number {
+  const as = a.week_start ?? Number.POSITIVE_INFINITY;
+  const bs = b.week_start ?? Number.POSITIVE_INFINITY;
+  if (as !== bs) return as < bs ? -1 : 1;
+  const ae = a.week_end ?? a.week_start ?? Number.POSITIVE_INFINITY;
+  const be = b.week_end ?? b.week_start ?? Number.POSITIVE_INFINITY;
+  if (ae !== be) return ae < be ? -1 : 1;
+  return a.position - b.position;
+}
+
+/**
+ * Ajusta as semanas de um card à sprint de destino (#91): semana final além
+ * da última vira a última; se nem a inicial existir, o card fica sem semana.
+ */
+export function clampWeeksToSprint(
+  weeks: Pick<Allocation, "week_start" | "week_end">,
+  sprint: Pick<Sprint, "start_date" | "end_date">,
+): Pick<Allocation, "week_start" | "week_end"> {
+  const total = sprintWeeks(sprint).length;
+  if (weeks.week_start == null || weeks.week_start > total) {
+    return { week_start: null, week_end: null };
+  }
+  return {
+    week_start: weeks.week_start,
+    week_end: Math.min(weeks.week_end ?? weeks.week_start, total),
+  };
+}
+
+/** Mesmas semanas (comparando a final efetiva) — só esses cards se reordenam entre si (#91). */
+export function sameWeeks(
+  a: Pick<Allocation, "week_start" | "week_end">,
+  b: Pick<Allocation, "week_start" | "week_end">,
+): boolean {
+  if (a.week_start !== b.week_start) return false;
+  return (a.week_end ?? a.week_start) === (b.week_end ?? b.week_start);
 }
