@@ -105,19 +105,22 @@ export function parseTicketToken(token: string): AllocationTicket {
 
 /**
  * Quebra um texto colado com vários tickets (um por linha/espaço/vírgula, ou
- * links grudados sem separador) e descarta repetidos (issue #51: o mesmo link
- * colado várias vezes seguidas virava um link só, inválido).
+ * links grudados sem separador) e descarta repetidos. Repetido é o mesmo
+ * ticket (chave + link), não o mesmo texto: "PIM-1 <link de PIM-1>" é um
+ * ticket só (issues #51 e #71).
  */
 export function parseTicketTokens(text: string): AllocationTicket[] {
   const seen = new Set<string>();
   return text
     .split(/[\s,]+|(?=https?:\/\/)/i)
     .map((t) => t.trim())
-    .filter((t) => {
-      const id = t.toLowerCase();
-      if (!t || seen.has(id)) return false;
+    .filter(Boolean)
+    .map(parseTicketToken)
+    .filter((ticket) => {
+      // Link em minúsculas mantém o dedupe case-insensitive da #51 (issue #71).
+      const id = `${ticket.key.trim().toUpperCase()}|${(ticket.url ?? "").trim().toLowerCase()}`;
+      if (seen.has(id)) return false;
       seen.add(id);
       return true;
-    })
-    .map(parseTicketToken);
+    });
 }
