@@ -844,11 +844,12 @@ function SprintRow({
                 />
               ))}
             </div>
+            {/* :focus-visible em vez de focus-within: foco por clique (ex.: após replicar) não deve manter o botão visível */}
             {canEdit && available ? (
               <button
                 onClick={() => onAdd(d.id)}
                 aria-label={`Adicionar demanda para ${d.name} em ${sprint.code}`}
-                className="pointer-events-none absolute inset-x-1.5 top-full z-10 mt-0 flex items-center justify-center gap-1 rounded-md border border-dashed border-grid-line bg-surface/90 py-1 text-[11px] text-muted-foreground opacity-0 shadow-card backdrop-blur-sm transition-opacity hover:border-primary hover:text-primary focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/cell:pointer-events-auto group-hover/cell:opacity-100 group-focus-within/cell:pointer-events-auto group-focus-within/cell:opacity-100"
+                className="pointer-events-none absolute inset-x-1.5 top-full z-10 mt-0 flex items-center justify-center gap-1 rounded-md border border-dashed border-grid-line bg-surface/90 py-1 text-[11px] text-muted-foreground opacity-0 shadow-card backdrop-blur-sm transition-opacity hover:border-primary hover:text-primary focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/cell:pointer-events-auto group-hover/cell:opacity-100 group-has-[:focus-visible]/cell:pointer-events-auto group-has-[:focus-visible]/cell:opacity-100"
               >
                 <Plus className="size-3" /> demanda
               </button>
@@ -981,7 +982,7 @@ function AllocationChip({
               aria-disabled={isReplicating}
               title={isReplicating ? "Replicando…" : "Replicar na próxima sprint"}
               aria-label={isReplicating ? "Replicando…" : "Replicar na próxima sprint"}
-              className={`absolute right-1 top-1 z-10 rounded p-0.5 text-foreground/60 transition-opacity hover:bg-background/60 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/chip:opacity-100 group-focus-within/chip:opacity-100 ${
+              className={`absolute right-1 top-1 z-10 rounded p-0.5 text-foreground/60 transition-opacity hover:bg-background/60 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/chip:opacity-100 group-focus-visible/chip:opacity-100 group-has-[:focus-visible]/chip:opacity-100 ${
                 isReplicating ? "cursor-wait opacity-100" : "opacity-0"
               }`}
             >
