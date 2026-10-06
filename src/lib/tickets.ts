@@ -79,6 +79,12 @@ export function ticketUrlProblem(url: string | null): TicketUrlProblem | null {
   return SINGLE_URL_RE.test(value) ? null : "esquema";
 }
 
+/** `true` enquanto o valor ainda pode virar `http://` ou `https://` (ex.: "h", "HTTPS:/"). Vazio → false. */
+export function isPartialHttpScheme(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  return !!v && ("http://".startsWith(v) || "https://".startsWith(v));
+}
+
 /** Primeiro link de um valor com vários `http(s)://` concatenados. */
 export function firstTicketUrl(url: string): string {
   const [first] = url.trim().split(/(?=https?:\/\/)/i);

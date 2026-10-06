@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -49,6 +49,7 @@ import { boardErrorMessage } from "@/lib/board-errors";
 import {
   extractJiraKey,
   firstTicketUrl,
+  isPartialHttpScheme,
   jiraUrlFor,
   normalizeJiraKey,
   parseTicketTokens,
@@ -109,6 +110,17 @@ export function AllocationDialog({
   const [confirming, setConfirming] = useState(false);
   const ticketsListRef = useRef<HTMLDivElement>(null);
   const prevTicketsCount = useRef(0);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const ticketRowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // Primeira linha com erro VISÍVEL na renderização anterior (-1 = nenhuma);
+  // só rola quando o erro aparece, não a cada tecla (issue #70).
+  const prevFirstShownProblem = useRef(-1);
+  // Linha de link com foco: o erro de esquema fica adiado nela (issue #70).
+  const [focusedUrlIndex, setFocusedUrlIndex] = useState<number | null>(null);
+  // Linha levada ao foco pelo clique no Salvar bloqueado: nela o erro não é
+  // mais adiado, senão o foco escondia justamente o motivo (issue #70).
+  const [revealedUrlIndex, setRevealedUrlIndex] = useState<number | null>(null);
+  const idPrefix = useId();
 
   useEffect(() => {
     // Trocar/fechar o draft nunca deve deixar a confirmação de exclusão aberta.
@@ -133,6 +145,9 @@ export function AllocationDialog({
     // "linha adicionada" pelo efeito de auto-scroll abaixo (abrir uma demanda
     // com vários tickets já deve mostrar do topo, não pular pro último).
     prevTicketsCount.current = (draft.tickets ?? []).length;
+    // Demanda aberta já com link inválido deve rolar até ele (issue #70).
+    prevFirstShownProblem.current = -1;
+    setRevealedUrlIndex(null);
     // `sprint` entra só para o corte inicial; reexecutar quando ele muda
     // (refetch em segundo plano) apagaria a edição em andamento.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -320,6 +335,59 @@ export function AllocationDialog({
   const hasTicketUrlProblem = tickets.some((t) => ticketUrlProblem(t.url) !== null);
   const hasTicketKeyProblem = tickets.some((t) => ticketKeyProblem(t) !== null);
 
+  // Problema de link EXIBIDO (issue #70): o erro de esquema fica oculto
+  // enquanto a pessoa ainda digita "h", "http:/"... na própria linha — senão
+  // aparece já na primeira letra. O bloqueio do Salvar usa o problema REAL.
+  const shownUrlProblemAt = (t: AllocationTicket, i: number) => {
+    const problem = ticketUrlProblem(t.url);
+    return problem === "esquema" &&
+      focusedUrlIndex === i &&
+      revealedUrlIndex !== i &&
+      isPartialHttpScheme(t.url ?? "")
+      ? null
+      : problem;
+  };
+  const rowHasShownProblem = (t: AllocationTicket, i: number) =>
+    ticketKeyProblem(t) !== null || shownUrlProblemAt(t, i) !== null;
+
+  // Leva a pessoa até o que impede o Salvar: rola até a primeira linha com
+  // problema REAL (pode estar fora da área visível de `max-h-32`) e foca o
+  // campo inválido.
+  const revealFirstTicketProblem = () => {
+    const index = tickets.findIndex(
+      (t) => ticketUrlProblem(t.url) !== null || ticketKeyProblem(t) !== null,
+    );
+    const row = index >= 0 ? ticketRowRefs.current[index] : null;
+    if (!row) return;
+    setRevealedUrlIndex(index);
+    row.scrollIntoView({ block: "nearest" });
+    (
+      row.querySelector<HTMLInputElement>('input[aria-invalid="true"]') ??
+      row.querySelector<HTMLInputElement>('input[data-field="url"]')
+    )?.focus();
+  };
+
+  // Quando um erro aparece (não a cada tecla), rola até ele sem mover o foco.
+  // Declarado DEPOIS do auto-scroll de linha adicionada: ao colar vários
+  // tickets com um inválido, o erro vence o "rolar para o fim" (issue #70).
+  const firstShownProblem = tickets.findIndex((t, i) => rowHasShownProblem(t, i));
+  useEffect(() => {
+    if (firstShownProblem >= 0 && firstShownProblem !== prevFirstShownProblem.current) {
+      ticketRowRefs.current[firstShownProblem]?.scrollIntoView({ block: "nearest" });
+    }
+    prevFirstShownProblem.current = firstShownProblem;
+  }, [firstShownProblem]);
+
+  // Por que o Salvar está bloqueado (issue #70). Mesmo raciocínio do Replicar:
+  // `disabled` não explica nada e sai da ordem de tabulação.
+  const saveBlockReason = !title.trim()
+    ? "Preencha o nome da demanda."
+    : hasTicketUrlProblem
+      ? "Corrija o link do ticket."
+      : hasTicketKeyProblem
+        ? "Corrija a chave do ticket."
+        : null;
+
   const remove = useMutation({
     mutationFn: async () => {
       if (!draft?.id) return;
@@ -347,6 +415,7 @@ export function AllocationDialog({
               <Label htmlFor="title">Demanda</Label>
               <Input
                 id="title"
+                ref={titleRef}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Ex.: Cadastro massivo de medidores"
@@ -455,11 +524,34 @@ export function AllocationDialog({
                   {tickets.map((t, i) => {
                     const linked = ticketKeyMismatch(t);
                     const typed = t.key.trim().toUpperCase();
-                    const urlProblem = ticketUrlProblem(t.url);
+                    const shownUrlProblem = shownUrlProblemAt(t, i);
                     const keyProblem = ticketKeyProblem(t);
                     const otherProject = ticketProjectMismatch(t, project);
+                    // Ids das mensagens, ligados aos inputs por aria-describedby
+                    // (issue #70). Sem role="alert": o erro de chave aparece a
+                    // cada tecla e viraria ruído no leitor de tela; o foco no
+                    // input inválido (revealFirstTicketProblem) já faz o leitor
+                    // ler a descrição.
+                    const keyErrId = `${idPrefix}-ticket-${i}-key`;
+                    const projectWarnId = `${idPrefix}-ticket-${i}-project`;
+                    const urlErrId = `${idPrefix}-ticket-${i}-url`;
+                    const linkedWarnId = `${idPrefix}-ticket-${i}-linked`;
+                    const keyDescribedBy =
+                      [keyProblem ? keyErrId : null, otherProject ? projectWarnId : null]
+                        .filter(Boolean)
+                        .join(" ") || undefined;
+                    const urlDescribedBy =
+                      [shownUrlProblem ? urlErrId : null, linked ? linkedWarnId : null]
+                        .filter(Boolean)
+                        .join(" ") || undefined;
                     return (
-                      <div key={i} className="space-y-1">
+                      <div
+                        key={i}
+                        className="space-y-1"
+                        ref={(el) => {
+                          ticketRowRefs.current[i] = el;
+                        }}
+                      >
                         <div className="flex gap-2">
                           <div className="grid flex-1 grid-cols-2 gap-2">
                             <Input
@@ -469,14 +561,20 @@ export function AllocationDialog({
                               placeholder="PIM-7862"
                               aria-label="Chave do ticket"
                               aria-invalid={keyProblem ? true : undefined}
+                              aria-describedby={keyDescribedBy}
+                              data-field="key"
                             />
                             <Input
                               value={t.url ?? ""}
                               onChange={(e) => handleTicketUrlChange(i, e.target.value)}
                               onPaste={(e) => handleTicketPaste(i, "url", e)}
+                              onFocus={() => setFocusedUrlIndex(i)}
+                              onBlur={() => setFocusedUrlIndex(null)}
                               placeholder="https://..."
                               aria-label="Link do ticket"
-                              aria-invalid={urlProblem ? true : undefined}
+                              aria-invalid={shownUrlProblem ? true : undefined}
+                              aria-describedby={urlDescribedBy}
+                              data-field="url"
                             />
                           </div>
                           <Button
@@ -489,23 +587,29 @@ export function AllocationDialog({
                           </Button>
                         </div>
                         {keyProblem ? (
-                          <p className="text-xs text-destructive">
+                          <p id={keyErrId} className="text-xs text-destructive">
                             "{t.key.trim()}" não é uma chave Jira (ex.: {project}-123). Corrija a
                             chave ou remova a linha.
                           </p>
                         ) : null}
                         {otherProject ? (
-                          <p className="text-xs text-amber-600 dark:text-amber-400">
+                          <p
+                            id={projectWarnId}
+                            className="text-xs text-amber-600 dark:text-amber-400"
+                          >
                             {normalizeJiraKey(t.key)} é do projeto {otherProject}, não do {project}.
                           </p>
                         ) : null}
-                        {urlProblem === "esquema" ? (
-                          <p className="text-xs text-destructive">
+                        {shownUrlProblem === "esquema" ? (
+                          <p id={urlErrId} className="text-xs text-destructive">
                             O link precisa começar com http:// ou https://.
                           </p>
                         ) : null}
-                        {urlProblem === "varios" ? (
-                          <p className="flex flex-wrap items-center gap-x-2 text-xs text-destructive">
+                        {shownUrlProblem === "varios" ? (
+                          <p
+                            id={urlErrId}
+                            className="flex flex-wrap items-center gap-x-2 text-xs text-destructive"
+                          >
                             <span>Há mais de um link neste campo.</span>
                             <Button
                               variant="link"
@@ -520,7 +624,10 @@ export function AllocationDialog({
                           </p>
                         ) : null}
                         {linked ? (
-                          <p className="flex flex-wrap items-center gap-x-2 text-xs text-amber-600 dark:text-amber-400">
+                          <p
+                            id={linkedWarnId}
+                            className="flex flex-wrap items-center gap-x-2 text-xs text-amber-600 dark:text-amber-400"
+                          >
                             <span>
                               O link aponta para {linked}, não para {typed}.
                             </span>
@@ -618,14 +725,30 @@ export function AllocationDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button
-                onClick={() => save.mutate()}
-                disabled={
-                  !title.trim() || hasTicketUrlProblem || hasTicketKeyProblem || save.isPending
-                }
-              >
-                Salvar
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* aria-disabled (não `disabled`), como no Replicar: o botão
+                    segue focável e o motivo do bloqueio aparece por hover e por
+                    teclado (issue #70). O clique barrado leva a pessoa ao campo
+                    que precisa de correção. */}
+                  <Button
+                    className="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+                    aria-disabled={!!saveBlockReason || save.isPending}
+                    onClick={() => {
+                      if (save.isPending) return;
+                      if (saveBlockReason) {
+                        if (!title.trim()) titleRef.current?.focus();
+                        else revealFirstTicketProblem();
+                        return;
+                      }
+                      save.mutate();
+                    }}
+                  >
+                    Salvar
+                  </Button>
+                </TooltipTrigger>
+                {saveBlockReason ? <TooltipContent>{saveBlockReason}</TooltipContent> : null}
+              </Tooltip>
             </div>
           </DialogFooter>
         </DialogContent>
