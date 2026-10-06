@@ -860,34 +860,57 @@ function SprintRow({
   );
 }
 
-/** 1º ticket + contador (`PIM-7862 +2`) — mesmo resumo no card e no hover, nunca a lista inteira. */
+/** Chave de um ticket: link (com ícone) quando há `url`, senão só o texto. */
+function TicketKey({
+  ticket,
+  stopPropagation,
+}: {
+  ticket: AllocationTicket;
+  stopPropagation?: boolean | undefined;
+}) {
+  if (!ticket.url) return <span className="font-mono">{ticket.key}</span>;
+  return (
+    <a
+      href={ticket.url}
+      target="_blank"
+      rel="noreferrer"
+      onClick={stopPropagation ? (e) => e.stopPropagation() : undefined}
+      className="inline-flex items-center gap-0.5 font-mono underline underline-offset-2"
+    >
+      {ticket.key}
+      <ExternalLink className="size-2.5" />
+    </a>
+  );
+}
+
+/**
+ * Resumo dos tickets. Por padrão, 1º ticket + contador (`PIM-7862 +2`);
+ * com `showAll`, lista todas as chaves (quebrando linha quando faltar espaço).
+ */
 function TicketSummary({
   tickets,
   className,
   stopPropagation,
+  showAll = false,
 }: {
   tickets: AllocationTicket[];
   className?: string;
   stopPropagation?: boolean;
+  showAll?: boolean;
 }) {
   if (tickets.length === 0) return null;
-  const first = tickets[0]!;
+  if (showAll) {
+    return (
+      <div className={`flex flex-wrap items-center gap-x-1.5 gap-y-0.5 ${className ?? ""}`}>
+        {tickets.map((t) => (
+          <TicketKey key={t.key} ticket={t} stopPropagation={stopPropagation} />
+        ))}
+      </div>
+    );
+  }
   return (
     <span className={`inline-flex items-center gap-0.5 ${className ?? ""}`}>
-      {first.url ? (
-        <a
-          href={first.url}
-          target="_blank"
-          rel="noreferrer"
-          onClick={stopPropagation ? (e) => e.stopPropagation() : undefined}
-          className="inline-flex items-center gap-0.5 font-mono underline underline-offset-2"
-        >
-          {first.key}
-          <ExternalLink className="size-2.5" />
-        </a>
-      ) : (
-        <span className="font-mono">{first.key}</span>
-      )}
+      <TicketKey ticket={tickets[0]!} stopPropagation={stopPropagation} />
       {tickets.length > 1 ? <span className="font-mono">+{tickets.length - 1}</span> : null}
     </span>
   );
@@ -974,10 +997,26 @@ function AllocationChip({
             {allocation.title}
           </p>
           {allowWrap && (allocation.tickets.length > 0 || allocation.notes) ? (
-            <div className="mt-1 flex items-center gap-1.5 text-[10px] opacity-80">
-              <TicketSummary tickets={allocation.tickets} stopPropagation />
-              {allocation.notes ? <span className="truncate">{allocation.notes}</span> : null}
-            </div>
+            allocation.tickets.length > 1 ? (
+              // Vários tickets: ocupam linha própria (todos visíveis, com quebra)
+              // e as notas descem para a linha de baixo.
+              <>
+                <TicketSummary
+                  tickets={allocation.tickets}
+                  stopPropagation
+                  showAll
+                  className="mt-1 text-[10px] opacity-80"
+                />
+                {allocation.notes ? (
+                  <p className="truncate text-[10px] opacity-80">{allocation.notes}</p>
+                ) : null}
+              </>
+            ) : (
+              <div className="mt-1 flex items-center gap-1.5 text-[10px] opacity-80">
+                <TicketSummary tickets={allocation.tickets} stopPropagation />
+                {allocation.notes ? <span className="truncate">{allocation.notes}</span> : null}
+              </div>
+            )
           ) : null}
         </div>
       </HoverCardTrigger>
@@ -994,7 +1033,7 @@ function AllocationChip({
             {tipoInfo(allocation.tipo).label}
           </span>
         </div>
-        <TicketSummary tickets={allocation.tickets} className="text-xs" />
+        <TicketSummary tickets={allocation.tickets} className="text-xs" showAll />
         <p className="text-sm font-medium leading-snug">{allocation.title}</p>
         {allocation.notes ? (
           <p className="text-xs text-muted-foreground">{allocation.notes}</p>
