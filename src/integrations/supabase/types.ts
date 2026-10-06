@@ -429,6 +429,10 @@ export type Database = {
         Args: { _target?: string; _team: string }
         Returns: undefined
       }
+      provision_sso_user: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
       reset_roulette: { Args: never; Returns: undefined }
       set_user_role: {
         Args: {

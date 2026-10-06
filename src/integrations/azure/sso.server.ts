@@ -68,11 +68,11 @@ export async function exchangeMicrosoftCode(code: string, redirectUri: string) {
     userId = data.user.id;
   }
 
-  // Mesmo padrão dos convites: papel leitor + guia Alocações, só se ainda não tiver papel.
-  const { data: role } = await supabaseAdmin.from("user_roles").select("role").eq("user_id", userId).maybeSingle();
-  if (!role) {
-    await supabaseAdmin.from("user_roles").insert({ user_id: userId, role: "viewer" });
-    await supabaseAdmin.from("user_route_access").insert({ user_id: userId, route: "alocacoes" });
+  // Papel leitor + guia Alocações numa única transação; quem já tem papel (convite/admin) não é tocado.
+  const { error: provisionError } = await supabaseAdmin.rpc("provision_sso_user", { p_user_id: userId });
+  if (provisionError) {
+    console.error("[sso] provision", provisionError);
+    throw new Error("Não foi possível liberar seu acesso. Tente novamente.");
   }
 
   const { data: link, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
