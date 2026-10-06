@@ -67,8 +67,9 @@ import { SprintDialog } from "./SprintDialog";
 import { TeamsDialog } from "./TeamsDialog";
 
 // Larguras mínimas das colunas (issue #48). Abaixo disso a grade rola na
-// horizontal, em vez de espremer os cards até ficarem ilegíveis.
-const SPRINT_COL_MIN_PX = 128;
+// horizontal, em vez de espremer os cards até ficarem ilegíveis. 144px
+// garante o período da sprint em uma linha (#94).
+const SPRINT_COL_MIN_PX = 144;
 const DEV_COL_MIN_PX = 152;
 
 // MIME próprio para arrastar a coluna da pessoa (#83). Separado de
@@ -947,9 +948,9 @@ function SprintRow({
           <span className="min-w-0 break-words text-sm font-semibold">{sprint.code}</span>
           <Pencil className="ml-auto size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60" />
         </div>
-        {/* Em 128px o período não cabe em uma linha: ele quebra no espaço
-            depois do "–" em vez de truncar (issue #56). */}
-        <p className="text-[11px] leading-tight text-muted-foreground">
+        {/* Com algarismos de largura fixa o período mede sempre ~113px e cabe
+            numa linha nos 144px da coluna (issue #94). */}
+        <p className="whitespace-nowrap text-[11px] leading-tight tabular-nums text-muted-foreground">
           {formatRange(sprint.start_date, sprint.end_date)}
         </p>
       </button>
