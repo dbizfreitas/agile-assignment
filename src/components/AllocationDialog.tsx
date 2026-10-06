@@ -228,7 +228,9 @@ export function AllocationDialog({
     const parsed = parseTicketTokens(text);
     // Mais de um http(s):// no texto colado nunca vai para o colar nativo,
     // mesmo que vire uma linha só depois de tirar os repetidos (issue #51).
-    if (parsed.length <= 1 && ticketUrlProblem(text) !== "varios") {
+    // O mesmo vale para vários tokens que colapsam em um ticket, como
+    // "PIM-1 <link de PIM-1>": só texto de um único token cola nativo (issue #71).
+    if (parsed.length <= 1 && ticketUrlProblem(text) !== "varios" && !/[\s,]/.test(text.trim())) {
       const [token] = parsed;
       // Token único: o texto colado é o próprio token.
       const isUrl = /^https?:\/\//i.test(text.trim());
