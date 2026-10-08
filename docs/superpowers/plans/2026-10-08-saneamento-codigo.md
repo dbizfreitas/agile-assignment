@@ -28,14 +28,17 @@
 1. **Linha de base.** `git switch -c chore/saneamento-inventario-19`. Rodar `npm run build` e `npm run lint` para registrar o estado atual (erros que já existem não entram como achado).
 
 2. **`devs.active`, código.** Confirmar os achados preliminares com:
+
    ```bash
    grep -rnw "active" src supabase scripts --include=*.ts --include=*.tsx --include=*.sql
    grep -rn "\.active\b\|\[\"active\"\]\|'active'" src
    grep -rn "devs" supabase/migrations supabase/tests | grep -iE "function|view|trigger|policy|select"
    ```
+
    Para cada função, view ou trigger que toca `devs`, ler o corpo e confirmar que não usa `active`. Registrar `git log -S"active" -- supabase src` para datar a origem e verificar se alguma vez houve UI de "inativar pessoa".
 
 3. **`devs.active`, banco.** Entregar ao Diego, para rodar no SQL Editor (read-only):
+
    ```sql
    -- distribuição do valor
    SELECT active, count(*) FROM public.devs GROUP BY active;
@@ -47,16 +50,19 @@
    SELECT schemaname, viewname FROM pg_views WHERE definition ~* 'devs' AND definition ~* '\mactive\M';
    SELECT tablename, policyname FROM pg_policies WHERE tablename = 'devs' AND (qual ~* 'active' OR with_check ~* 'active');
    ```
+
    Se existir alguma pessoa com `active = false`, o campo **tem** significado legado: a recomendação passa a ser migrar esse estado para `available_to` antes de qualquer remoção.
 
 4. **`devs.active`, relatório.** Escrever a seção com os 9 pontos da issue. O plano de remoção, se aprovado, tem quatro partes: (a) tirar `active` do tipo `Dev` em `src/lib/board.ts`; (b) criar a migration `ALTER TABLE public.devs DROP COLUMN active;`, aplicada pelo SQL Editor **depois** do deploy do front; (c) regenerar `src/integrations/supabase/types.ts`; (d) avisar quem consome a REST. Risco esperado: baixo, condicionado ao Passo 3.
 
 5. **Varredura TypeScript.**
+
    ```bash
    npx tsc --noEmit --noUnusedLocals --noUnusedParameters -p tsconfig.json
    npx eslint . --rule "@typescript-eslint/no-unused-vars: error"
    npx knip --reporter compact   # após autorização (Decisão 4)
    ```
+
    Triar cada achado: exports sem import, arquivos órfãos, hooks e utilitários sem chamador (por exemplo, conferir `src/hooks/use-mobile.tsx`, `src/lib/lovable-error-reporting.ts` e `src/lib/error-page.ts`), e imports sem uso. Exports usados só em `routeTree.gen.ts` ou pelo roteador por convenção de arquivo (`Route`) **não** são mortos.
 
 6. **Dependências.** Usar a saída de dependências do `knip` ou, no fallback, `grep -rn "from \"<pacote>\"" src` para cada item de `dependencies`. Candidatos prováveis: `embla-carousel-react`, `input-otp`, `react-resizable-panels`, `cmdk` e `@radix-ui/*` usados só em `components/ui/*` não importados. Conferir também `devDependencies` e `vite.config.ts` (plugins).
