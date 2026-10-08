@@ -93,7 +93,36 @@ export const SPRINT_COMMITMENT_OVERRIDES: Record<number, string[]> = {
 
 export interface SprintDataLike extends SprintLike {
   id: number;
+  name?: string | undefined;
   startDate?: string | undefined;
+}
+
+// ── Compromisso por versão (sprints >= 26.4.1) ────────────────────────────────
+// A partir da 26.4.1 o compromisso é a label COMPROMISSO-<versão da sprint>
+// (ex.: COMPROMISSO-26.4.1). A genérica COMPROMISSO não conta, e não há
+// changelog nem data de inclusão da label envolvidos: tem a label da versão,
+// é compromisso daquela sprint — uma issue pode carregar várias versões.
+const VERSIONED_COMMITMENT_FROM = [26, 4, 1];
+
+// "PDC-26.4.1", "PH - 26.4.1", "INTFLOW - 26.4.1" → [26, 4, 1]
+export function sprintVersionOf(name: string | null | undefined): number[] | null {
+  const m = String(name ?? "").match(/\d{2}\.\d+\.\d+/);
+  return m ? m[0].split(".").map(Number) : null;
+}
+
+// Comparação numérica parte a parte (26.10.1 > 26.4.1), não lexicográfica.
+export function compareVersions(a: number[], b: number[]): number {
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (a[i] ?? 0) - (b[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
+function versionedCommitmentLabel(sprintData?: SprintDataLike | null): string | null {
+  const v = sprintVersionOf(sprintData?.name);
+  if (!v || compareVersions(v, VERSIONED_COMMITMENT_FROM) < 0) return null;
+  return normLabel(`${COMMIT_LABEL}-${v.join(".")}`);
 }
 
 export function makeIsCommitmentIssueForSprint(sprintData?: SprintDataLike | null) {
@@ -102,7 +131,31 @@ export function makeIsCommitmentIssueForSprint(sprintData?: SprintDataLike | nul
     const keys = new Set(override);
     return (issue: IssueResponse) => keys.has(issue?.key);
   }
+  const versioned = versionedCommitmentLabel(sprintData);
+  if (versioned) return (issue: IssueResponse) => labelsOf(issue).includes(versioned);
   return makeIsCommitmentIssue(sprintData?.startDate, sprintDoneBound(sprintData));
+}
+
+// Lista única das issues de compromisso da sprint — fonte do burndown e dos
+// cards da aba. Sem duplicatas por chave. Nas sprints com label por versão, se
+// pai e filhas são compromisso na mesma sprint, contam só as filhas (o SP do
+// pai é rollup delas). Sprints anteriores mantêm a lógica de antes, intacta.
+export function getCommitmentIssues(
+  sprintData: SprintDataLike | null | undefined,
+  issues: IssueResponse[],
+): IssueResponse[] {
+  const isCommitment = makeIsCommitmentIssueForSprint(sprintData);
+  const seen = new Set<string>();
+  const commitment = (issues ?? []).filter((i) => {
+    if (!isCommitment(i) || seen.has(i.key)) return false;
+    seen.add(i.key);
+    return true;
+  });
+  if (!versionedCommitmentLabel(sprintData)) return commitment;
+  const parentsInCommitment = new Set(
+    commitment.filter((i) => i.parent && seen.has(i.parent)).map((i) => i.parent as string),
+  );
+  return commitment.filter((i) => !parentsInCommitment.has(i.key));
 }
 
 // ── Cabeçalhos / rollup de SP ──────────────────────────────────────────────────

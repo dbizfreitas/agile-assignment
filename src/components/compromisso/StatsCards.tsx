@@ -2,6 +2,7 @@ import { AlertCircle, CheckCircle2, ListChecks, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   computeIssueGroups,
+  getCommitmentIssues,
   isDoneInSprint,
   makeIsCommitmentIssueForSprint,
   makeIsHeader,
@@ -64,7 +65,7 @@ export function StatsCards({
   let doneKeys: string[] | null = null;
 
   if (viewMode === "done") {
-    const commitItems = (all ?? []).filter(makeIsCommitmentIssueForSprint(sprintData));
+    const commitItems = getCommitmentIssues(sprintData, all);
     const commitDone = commitItems.filter((i) =>
       isDoneInSprint(i, sprintData?.startDate, doneBound),
     );

@@ -6,7 +6,7 @@
 import {
   doneDateOf,
   isDoneInSprint,
-  makeIsCommitmentIssueForSprint,
+  getCommitmentIssues,
   sprintDoneBound,
   type SprintDataLike,
 } from "./calc";
@@ -36,13 +36,7 @@ export function computeBurndownData(
 ): BurndownData | null {
   if (!sprintData?.startDate) return null;
 
-  const isCommitmentIssue = makeIsCommitmentIssueForSprint(sprintData);
-  const seen = new Set<string>();
-  const commitment = (all ?? []).filter((i) => {
-    if (!isCommitmentIssue(i) || seen.has(i.key)) return false;
-    seen.add(i.key);
-    return true;
-  });
+  const commitment = getCommitmentIssues(sprintData, all);
   if (!commitment.length) return null;
 
   const totalSP = commitment.reduce((s, i) => s + (i.sp ?? 0), 0);
