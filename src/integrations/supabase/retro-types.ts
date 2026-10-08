@@ -5,6 +5,7 @@ type RetroParticipantRow = {
   id: string;
   name: string;
   email: string;
+  jira_project: string;
   color: string | null;
   sort_order: number;
   photo_data_url: string | null;
@@ -13,7 +14,7 @@ type RetroParticipantRow = {
 };
 
 type RetroRouletteStateRow = {
-  id: boolean;
+  jira_project: string;
   drawn_emails: string[];
   skipped_emails: string[];
   last_winner_email: string | null;
@@ -43,11 +44,11 @@ type RetroDatabase = Omit<Database, "public"> & {
       ms_graph_token: TableDefinition<MsGraphTokenRow>;
     };
     Functions: Database["public"]["Functions"] & {
-      spin_roulette: { Args: Record<string, never>; Returns: string };
-      skip_participant: { Args: { _email: string }; Returns: undefined };
-      unskip_participant: { Args: { _email: string }; Returns: undefined };
-      unmark_participant: { Args: { _email: string }; Returns: undefined };
-      reset_roulette: { Args: Record<string, never>; Returns: undefined };
+      spin_roulette: { Args: { _project: string }; Returns: string };
+      skip_participant: { Args: { _project: string; _email: string }; Returns: undefined };
+      unskip_participant: { Args: { _project: string; _email: string }; Returns: undefined };
+      unmark_participant: { Args: { _project: string; _email: string }; Returns: undefined };
+      reset_roulette: { Args: { _project: string }; Returns: undefined };
     };
   };
 };

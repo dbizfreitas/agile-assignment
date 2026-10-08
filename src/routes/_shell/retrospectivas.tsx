@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useShell } from "@/components/shell/shell-context";
 import { RouletteView } from "@/components/retrospectivas/RouletteView";
 
 // A guia fica escondida da nav e do acesso direto por URL para quem não tem
@@ -11,7 +12,9 @@ import { RouletteView } from "@/components/retrospectivas/RouletteView";
 // (supabase/migrations/20260902180000_retro_participants_foundation.sql)
 // são protegidas por RLS exigindo has_route(uid, 'retrospectivas') — quem
 // não tem a rota não lê nome/e-mail de ninguém via API do Supabase, mesmo
-// com o bundle JS em mãos. Mutações do sorteio passam por RPCs
+// com o bundle JS em mãos. Participantes e estado do sorteio são por projeto
+// Jira (coluna `jira_project`, migration 20261008120000_retro_por_projeto.sql):
+// o projeto vem do seletor da casca. Mutações do sorteio passam por RPCs
 // SECURITY DEFINER que exigem papel editor/admin além da rota
 // (private.can_edit_retrospectivas).
 export const Route = createFileRoute("/_shell/retrospectivas")({
@@ -21,7 +24,8 @@ export const Route = createFileRoute("/_shell/retrospectivas")({
       { title: "Retrospectivas — Roleta de sorteio do time" },
       {
         name: "description",
-        content: "Sorteia quem conduz a próxima retro, com estado que sobrevive ao refresh.",
+        content:
+          "Sorteia quem conduz a próxima retro do time do projeto, com estado que sobrevive ao refresh.",
       },
     ],
   }),
@@ -29,5 +33,8 @@ export const Route = createFileRoute("/_shell/retrospectivas")({
 });
 
 function RetrospectivasPage() {
-  return <RouletteView />;
+  const { project } = useShell();
+  // `key={project}`: remonta a roleta ao trocar de projeto, zerando a animação
+  // e o destaque em andamento (mesmo padrão de alocacoes.tsx).
+  return <RouletteView key={project} />;
 }
