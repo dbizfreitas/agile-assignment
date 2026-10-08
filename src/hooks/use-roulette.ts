@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { withRetroTypes } from "@/integrations/supabase/retro-types";
+import type { JiraProjectKey } from "@/lib/projects";
 import type { RetroParticipant } from "./use-retro-participants";
 
 const retroSupabase = withRetroTypes(supabase);
@@ -11,6 +12,7 @@ const retroSupabase = withRetroTypes(supabase);
 const ROULETTE_ERROR_MESSAGES: Record<string, string> = {
   W2001: "Você não tem permissão para esta ação.",
   W2402: "Todo mundo já foi sorteado ou está marcado como ausente.",
+  W2403: "Projeto inválido.",
 };
 
 function rouletteErrorMessage(error: unknown): string {
@@ -56,7 +58,10 @@ function pickRandom(pool: readonly string[]): string | undefined {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-export function useRoulette(participants: readonly RetroParticipant[]): RouletteApi {
+export function useRoulette(
+  participants: readonly RetroParticipant[],
+  project: JiraProjectKey,
+): RouletteApi {
   const qc = useQueryClient();
   const [highlight, setHighlight] = useState<string | null>(null);
   const [spinning, setSpinning] = useState(false);
@@ -76,14 +81,17 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
   }, []);
 
   const stateQ = useQuery({
-    queryKey: ["retro-roulette-state"],
+    queryKey: ["retro-roulette-state", project],
     queryFn: async (): Promise<RouletteState> => {
       const { data, error } = await retroSupabase
         .from("retro_roulette_state")
         .select("drawn_emails, skipped_emails, last_winner_email")
-        .eq("id", true)
-        .single();
+        .eq("jira_project", project)
+        .maybeSingle();
       if (error) throw error;
+      // O estado do projeto nasce sob demanda, no primeiro uso das RPCs:
+      // sem linha não é erro, é um sorteio que ainda não começou.
+      if (!data) return { drawnEmails: [], skippedEmails: [], lastWinnerEmail: null };
       return {
         drawnEmails: data.drawn_emails,
         skippedEmails: data.skipped_emails,
@@ -106,12 +114,12 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
   );
 
   const invalidateState = useCallback(() => {
-    void qc.invalidateQueries({ queryKey: ["retro-roulette-state"] });
-  }, [qc]);
+    void qc.invalidateQueries({ queryKey: ["retro-roulette-state", project] });
+  }, [qc, project]);
 
   const spinMutation = useMutation({
     mutationFn: async (): Promise<string> => {
-      const { data, error } = await retroSupabase.rpc("spin_roulette");
+      const { data, error } = await retroSupabase.rpc("spin_roulette", { _project: project });
       if (error) throw error;
       return data;
     },
@@ -119,7 +127,10 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
 
   const skipMutation = useMutation({
     mutationFn: async (email: string) => {
-      const { error } = await retroSupabase.rpc("skip_participant", { _email: email });
+      const { error } = await retroSupabase.rpc("skip_participant", {
+        _project: project,
+        _email: email,
+      });
       if (error) throw error;
     },
     onSuccess: invalidateState,
@@ -128,7 +139,10 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
 
   const unskipMutation = useMutation({
     mutationFn: async (email: string) => {
-      const { error } = await retroSupabase.rpc("unskip_participant", { _email: email });
+      const { error } = await retroSupabase.rpc("unskip_participant", {
+        _project: project,
+        _email: email,
+      });
       if (error) throw error;
     },
     onSuccess: invalidateState,
@@ -137,7 +151,10 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
 
   const unmarkMutation = useMutation({
     mutationFn: async (email: string) => {
-      const { error } = await retroSupabase.rpc("unmark_participant", { _email: email });
+      const { error } = await retroSupabase.rpc("unmark_participant", {
+        _project: project,
+        _email: email,
+      });
       if (error) throw error;
     },
     onSuccess: invalidateState,
@@ -146,7 +163,7 @@ export function useRoulette(participants: readonly RetroParticipant[]): Roulette
 
   const resetMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await retroSupabase.rpc("reset_roulette");
+      const { error } = await retroSupabase.rpc("reset_roulette", { _project: project });
       if (error) throw error;
     },
     onSuccess: invalidateState,
