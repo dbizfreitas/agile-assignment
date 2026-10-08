@@ -57,6 +57,7 @@ import {
 import type { BoardSearch } from "@/lib/board-search";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
+import { ticketUrlProblem } from "@/lib/tickets";
 import { useReorderDevs } from "@/hooks/use-reorder-devs";
 import { useReorderAllocations } from "@/hooks/use-reorder-allocations";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
@@ -1093,7 +1094,7 @@ function SprintRow({
   );
 }
 
-/** Chave de um ticket: link (com ícone) quando há `url`, senão só o texto. */
+/** Chave de um ticket: link (com ícone) quando há `url` válida, senão só o texto (link vazio ou inválido também cai no texto). */
 function TicketKey({
   ticket,
   stopPropagation,
@@ -1101,7 +1102,8 @@ function TicketKey({
   ticket: AllocationTicket;
   stopPropagation?: boolean | undefined;
 }) {
-  if (!ticket.url) return <span className="font-mono">{ticket.key}</span>;
+  if (!ticket.url?.trim() || ticketUrlProblem(ticket.url) !== null)
+    return <span className="font-mono">{ticket.key}</span>;
   return (
     <a
       href={ticket.url}
