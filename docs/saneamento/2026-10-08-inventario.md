@@ -38,7 +38,7 @@ Este documento é só análise e inventário. Nenhum código foi alterado. O pla
 - **Leitura indireta:** `select("*")` em `BoardGrid.tsx:196` e `TeamsDialog.tsx:73` traz a coluna para o cliente, mas ninguém a lê pelo nome. Spreads como `{...d, position}` apenas repassam o objeto. Não há `Object.keys`, `JSON.stringify` ou exportação CSV sobre `Dev`. O embed (`embed.alocacoes.tsx`) reaproveita o `BoardGrid`.
 - **Falsos positivos:** os `active` em `security_invariants_*` e `provision_sso_user` são de `cron.job.active`.
 
-**4. Quem depende dele.** Ninguém no repositório: nem código, nem migrations, policies, triggers, funções ou testes. No banco de produção, também ninguém (ver "Resultado em produção" abaixo). Fora do app, falta confirmar se existe consumidor da REST do Supabase 🔎.
+**4. Quem depende dele.** Ninguém no repositório: nem código, nem migrations, policies, triggers, funções ou testes. No banco de produção, também ninguém (ver "Resultado em produção" abaixo). Fora do app, também ninguém: o dono confirmou em 08/10/2026 que nenhum cliente externo (Power BI, planilha, script) lê a REST do Supabase.
 
 **5. Fluxo funcional associado.** Nenhum, e nunca houve UI de "inativar pessoa". Nem `git log -S"active"` nem `git log --all -S"inativ"` acham isso. O plano `docs/superpowers/plans/2026-08-15-disponibilidade-pessoa.md:23,883` já registrava a coluna como morta ("merece issue própria: usar ou dropar"). A spec de disponibilidade (`:230`) rejeitou reaproveitá-la como interruptor manual.
 
@@ -55,7 +55,7 @@ Este documento é só análise e inventário. Nenhum código foi alterado. O pla
 | Triggers de `devs`                           | só `devs_set_project`, que chama `private.set_dev_project()` e lê apenas `teams.jira_project`                                                 |
 | Objetos que dependem da coluna (`pg_depend`) | 0                                                                                                                                             |
 
-**7. Pode ser removido?** Sim. Nenhuma pessoa está com `active = false`, e nada no banco depende da coluna. A única condição que resta é não haver consumidor externo da REST lendo `active`.
+**7. Pode ser removido?** Sim. Nenhuma pessoa está com `active = false`, e nada no banco depende da coluna. O dono também confirmou que não há consumidor externo da REST. Pode ser removida sem condições pendentes.
 
 **8. O que alterar para remover.** A ordem é front primeiro, banco depois.
 
@@ -68,14 +68,14 @@ Este documento é só análise e inventário. Nenhum código foi alterado. O pla
    -- devs.active: coluna sem leitores nem escritores (issue #19).
    ALTER TABLE public.devs DROP COLUMN active;
    ```
-3. Se houver consumidor externo da REST, avisá-lo antes.
+3. Não há consumidor externo da REST a avisar (confirmado pelo dono).
 4. Rollback: `ALTER TABLE public.devs ADD COLUMN active boolean NOT NULL DEFAULT true;`. Os valores originais se perdem, mas hoje todos devem ser `true`.
 
-**9. Risco.** Baixo, se as consultas confirmarem. Os riscos reais são três:
+**9. Risco.** Baixo. Dois dos riscos levantados na análise já foram descartados:
 
-- Existir pessoa com `active = false` e significado legado. Nesse caso, primeiro migrar para `available_to` com a data de saída informada pelo dono.
-- Um consumidor externo fazer `select=active`.
-- Aplicar o DROP antes do front publicado. Não quebra o app (o front nunca escreve a coluna e `select("*")` continua funcionando), mas o tipo fica desatualizado.
+- ~~Existir pessoa com `active = false` e significado legado.~~ Descartado: as 14 pessoas estão com `true`.
+- ~~Um consumidor externo fazer `select=active`.~~ Descartado: o dono confirmou que não há consumidor externo.
+- O único risco que resta é aplicar o DROP antes do front publicado. Não quebra o app (o front nunca escreve a coluna e `select("*")` continua funcionando), mas o tipo fica desatualizado.
 
 ## Inventário
 
@@ -183,7 +183,7 @@ ORDER BY table_name, ordinal_position;
 - Em A, se aparecer `devs com active = false`, a coluna tem significado legado. Antes de remover, é preciso registrar a data de saída em `available_to`. Se alguma função, view, policy ou dependência aparecer, é preciso tratar o objeto antes do DROP.
 - Em A, se `ms_graph_token` tiver 0 linhas com refresh token, fica confirmado que o Graph nunca funcionou.
 - B e C: qualquer função ou coluna que não esteja nas migrations ou em `types.ts` indica drift (algo criado fora das migrations) e entra no inventário.
-- Fora do banco: algum cliente fora do app (Power BI, planilha, script) lê a REST do Supabase? Se sim, nenhuma coluna ou tabela é "alta confiança" antes de falar com esse consumidor.
+- Fora do banco: o dono confirmou em 08/10/2026 que nenhum cliente fora do app (Power BI, planilha, script) lê a REST do Supabase. Por isso, a confiança dos itens de banco depende só das consultas acima.
 
 ## Próximos passos sugeridos (cada um em issue própria)
 
