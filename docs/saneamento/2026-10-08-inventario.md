@@ -4,7 +4,7 @@ Este documento é só análise e inventário. Nenhum código foi alterado. O pla
 
 **Data:** 08/10/2026. **Branch:** `chore/saneamento-inventario-19`.
 
-**Banco de produção:** as consultas A e B foram rodadas em 08/10/2026. Os resultados estão na seção de `devs.active`, nas linhas da tabela e na seção [Consultas pendentes no SQL Editor](#consultas-pendentes-no-sql-editor). Falta só a consulta C (colunas); o único item que depende dela está marcado com 🔎.
+**Banco de produção:** as consultas A, B e C foram rodadas em 08/10/2026, e não há mais pendências de banco. Os resultados estão na seção de `devs.active`, nas linhas da tabela e na seção [Consultas no SQL Editor](#consultas-no-sql-editor). Também não há consumidor externo da REST do Supabase (confirmado pelo dono).
 
 ## Resumo
 
@@ -121,7 +121,7 @@ Ordenado por confiança. "Alta (interno)" quer dizer que não há referência no
 
 `lovable-error-reporting.ts`, `error-page.ts`, `error-capture.ts`, `ui/sonner.tsx` (importado por caminho relativo), `router.tsx`, `start.ts` (convenção do TanStack Start), `previewAuthStorage.ts` (import relativo com aspas simples), `toDraft`, `photo_data_url`/`photo_fetched_at`, `retro_participants.sort_order`/`color`, `ticket_url_is_valid` (usado em CHECK), funções de trigger, e dependências de toolchain ou peer (`tsx`, `@tailwindcss/vite`, `vite-tsconfig-paths`, `@vitejs/plugin-react`, `nitro`, `eslint-config-prettier`, `react-dom`, `@types/*`). Também `@radix-ui/react-slot`/`react-label` e `class-variance-authority`, que são usados por componentes `ui/*` vivos.
 
-## Consultas pendentes no SQL Editor
+## Consultas no SQL Editor
 
 Todas são somente leitura. O SQL Editor mostra apenas o resultado da última instrução, por isso cada bloco devolve uma única tabela.
 
@@ -184,6 +184,7 @@ ORDER BY table_name, ordinal_position;
 - Em A, se `ms_graph_token` tiver 0 linhas com refresh token, fica confirmado que o Graph nunca funcionou. **Resultado em 08/10/2026:** 0 de 1 linha, confirmado. Em `user_route_access`, 3 de 11 linhas têm `granted_by`.
 - B e C: qualquer função ou coluna que não esteja nas migrations ou em `types.ts` indica drift (algo criado fora das migrations) e entra no inventário.
 - **Resultado de B em 08/10/2026:** sem drift. As 32 funções do banco são exatamente o estado final das migrations: 16 em `private` e 16 em `public`. Não sobrou nenhuma versão antiga: `public.has_role` e `public.can_edit_board`, removidas em `20260804121648`, não existem mais, nem as 5 RPCs da roleta sem `_project`, removidas em `20261008120000`.
+- **Resultado de C em 08/10/2026:** sem drift. As 11 tabelas e todas as colunas do banco batem com o `Row` de cada tabela em `src/integrations/supabase/types.ts`: nenhuma coluna existe só no banco e nenhuma só no tipo. A única coluna morta continua sendo `devs.active`.
 - Fora do banco: o dono confirmou em 08/10/2026 que nenhum cliente fora do app (Power BI, planilha, script) lê a REST do Supabase. Por isso, a confiança dos itens de banco depende só das consultas acima.
 
 ## Próximos passos sugeridos (cada um em issue própria)
