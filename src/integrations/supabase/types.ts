@@ -211,6 +211,7 @@ export type Database = {
           created_at: string
           email: string
           id: string
+          jira_project: string
           name: string
           photo_data_url: string | null
           photo_fetched_at: string | null
@@ -221,6 +222,7 @@ export type Database = {
           created_at?: string
           email: string
           id?: string
+          jira_project: string
           name: string
           photo_data_url?: string | null
           photo_fetched_at?: string | null
@@ -231,6 +233,7 @@ export type Database = {
           created_at?: string
           email?: string
           id?: string
+          jira_project?: string
           name?: string
           photo_data_url?: string | null
           photo_fetched_at?: string | null
@@ -241,21 +244,21 @@ export type Database = {
       retro_roulette_state: {
         Row: {
           drawn_emails: string[]
-          id: boolean
+          jira_project: string
           last_winner_email: string | null
           skipped_emails: string[]
           updated_at: string
         }
         Insert: {
           drawn_emails?: string[]
-          id?: boolean
+          jira_project: string
           last_winner_email?: string | null
           skipped_emails?: string[]
           updated_at?: string
         }
         Update: {
           drawn_emails?: string[]
-          id?: boolean
+          jira_project?: string
           last_winner_email?: string | null
           skipped_emails?: string[]
           updated_at?: string
@@ -433,7 +436,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: boolean
       }
-      reset_roulette: { Args: never; Returns: undefined }
+      reset_roulette: { Args: { _project: string }; Returns: undefined }
       set_user_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -448,11 +451,20 @@ export type Database = {
         }
         Returns: undefined
       }
-      skip_participant: { Args: { _email: string }; Returns: undefined }
-      spin_roulette: { Args: never; Returns: string }
+      skip_participant: {
+        Args: { _email: string; _project: string }
+        Returns: undefined
+      }
+      spin_roulette: { Args: { _project: string }; Returns: string }
       ticket_url_is_valid: { Args: { url: string }; Returns: boolean }
-      unmark_participant: { Args: { _email: string }; Returns: undefined }
-      unskip_participant: { Args: { _email: string }; Returns: undefined }
+      unmark_participant: {
+        Args: { _email: string; _project: string }
+        Returns: undefined
+      }
+      unskip_participant: {
+        Args: { _email: string; _project: string }
+        Returns: undefined
+      }
     }
     Enums: {
       allocation_status: "nao_especificada" | "especificada"
