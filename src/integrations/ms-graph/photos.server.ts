@@ -85,6 +85,10 @@ export async function getCachedOrFetchPhoto(
     .from("retro_participants")
     .select("photo_data_url, photo_fetched_at")
     .eq("email", email)
+    // A mesma pessoa pode estar na retro de mais de um projeto (uma linha por
+    // projeto): a foto é da pessoa, então vale a leitura mais recente.
+    .order("photo_fetched_at", { ascending: false, nullsFirst: false })
+    .limit(1)
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
