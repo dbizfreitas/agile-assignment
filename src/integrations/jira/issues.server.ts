@@ -12,7 +12,7 @@ import {
 } from "./config.server";
 import type { IssueResponse } from "@/lib/compromisso/types";
 
-export interface JiraIssueRaw {
+interface JiraIssueRaw {
   key: string;
   fields: {
     summary: string;
@@ -83,7 +83,7 @@ async function fetchDoneStatusIds(): Promise<Set<string>> {
 // de um status NÃO-done para um status done (esse é o instante em que "ficou
 // pronta"). `doneNames` é o conjunto de NOMES de status done (derivado dos
 // status atuais das issues da sprint) — usado apenas como fallback.
-export function computeDoneAt(
+function computeDoneAt(
   iss: JiraIssueRaw,
   doneNames: Set<string>,
   doneStatusIds?: Set<string>,
@@ -139,7 +139,7 @@ const COMMIT_LABEL_RE = /^compromisso(-.+)?$/i;
 
 // Momento em que a issue passou a ter, de forma ININTERRUPTA até agora,
 // alguma label da família "compromisso" — via changelog do campo "labels".
-export function computeCommitmentAt(iss: JiraIssueRaw): string | null {
+function computeCommitmentAt(iss: JiraIssueRaw): string | null {
   const hasFamily = (labels: string[]) => labels.some((l) => COMMIT_LABEL_RE.test(l));
   if (!hasFamily(iss.fields.labels ?? [])) return null;
 

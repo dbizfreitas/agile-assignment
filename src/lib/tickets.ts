@@ -15,7 +15,7 @@ export function normalizeJiraKey(text: string): string | null {
   return JIRA_KEY_EXACT_RE.test(value) ? value : null;
 }
 
-export function isJiraUrl(url: string): boolean {
+function isJiraUrl(url: string): boolean {
   return url.trim().toLowerCase().startsWith(JIRA_BASE.toLowerCase());
 }
 
@@ -92,7 +92,7 @@ export function firstTicketUrl(url: string): string {
 }
 
 /** Interpreta um token colado (URL do Jira ou chave solta) como um ticket. */
-export function parseTicketToken(token: string): AllocationTicket {
+function parseTicketToken(token: string): AllocationTicket {
   const trimmed = token.trim();
   if (/^https?:\/\//i.test(trimmed)) {
     return { key: extractJiraKey(trimmed) ?? "", url: trimmed };

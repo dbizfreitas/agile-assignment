@@ -12,13 +12,13 @@ import {
 } from "./calc";
 import type { IssueResponse } from "./types";
 
-export interface BurndownKey {
+interface BurndownKey {
   key: string;
   sp: number | null;
   resolved: boolean;
 }
 
-export interface BurndownPoint {
+interface BurndownPoint {
   label: string;
   ideal: number;
   actual: number | null;

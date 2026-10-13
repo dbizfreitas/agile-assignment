@@ -173,7 +173,7 @@ async function fetchProjectStatuses(
 
 // Exportada para ser exercitada por script avulso — o cálculo é puro dado o
 // `now` interno, e é o coração do port.
-export function buildCtPayload(
+function buildCtPayload(
   issues: CycleTimeIssueRaw[],
   projectStatuses: string[],
   excludeStatuses: Set<string>,

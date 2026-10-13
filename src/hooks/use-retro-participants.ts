@@ -1,9 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { withRetroTypes } from "@/integrations/supabase/retro-types";
 import type { JiraProjectKey } from "@/lib/projects";
-
-const retroSupabase = withRetroTypes(supabase);
 
 export type RetroParticipant = {
   id: string;
@@ -23,7 +20,7 @@ export function useRetroParticipants(project: JiraProjectKey) {
     queryKey: ["retro-participants", project],
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<RetroParticipant[]> => {
-      const { data, error } = await retroSupabase
+      const { data, error } = await supabase
         .from("retro_participants")
         .select("id, name, email, color, sort_order")
         .eq("jira_project", project)

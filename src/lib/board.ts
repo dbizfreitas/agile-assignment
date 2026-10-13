@@ -163,7 +163,7 @@ export function accentClassFor(a: Pick<Allocation, "tipo" | "status">) {
  * `2026-08-15` → `15/08/26`. Fatia a string em vez de construir um `Date`:
  * `new Date("2026-08-15")` é meia-noite UTC e vira 14/08 em `UTC-3`.
  */
-export function formatDate(iso: string) {
+function formatDate(iso: string) {
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y?.slice(2)}`;
 }
