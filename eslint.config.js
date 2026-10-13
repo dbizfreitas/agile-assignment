@@ -6,9 +6,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  // O cache de fotos da retro é gerado à mão, fica fora do git e tem ~1,3 MB
-  // numa linha só; lintar/formatar não faz sentido. `eslint .` não lê .gitignore.
-  { ignores: ["dist", ".output", ".vinxi", "src/lib/retrospectivas/photos-cache.ts"] },
+  { ignores: ["dist", ".output", ".vinxi"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
