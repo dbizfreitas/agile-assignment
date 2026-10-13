@@ -64,7 +64,9 @@ async function fetchParticipantPhoto(email: string): Promise<string> {
 // ambiente (produção, ver getCacheWriter) e só cai no client do usuário
 // sem ela (dev local) — aí degrada graciosamente: a foto ainda é
 // retornada certa pra esta chamada, só o cache no banco não se atualiza.
-async function getCacheWriter(userClient: SupabaseClient<Database>): Promise<SupabaseClient<Database>> {
+async function getCacheWriter(
+  userClient: SupabaseClient<Database>,
+): Promise<SupabaseClient<Database>> {
   // Checa o env antes de tocar no supabaseAdmin: o Proxy de
   // client.server.ts lança (e loga) a cada acesso quando a chave falta.
   if (!process.env["SUPABASE_URL"] || !process.env["SUPABASE_SERVICE_ROLE_KEY"]) {
