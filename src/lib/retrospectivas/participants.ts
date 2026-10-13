@@ -7,7 +7,7 @@ export type Participant = { name: string; email: string; color?: string | null }
 // As mesmas 21 cores do legado, na mesma ordem: a cor de cada pessoa é
 // AVATAR_COLORS[i % 21]. Mudar a ordem da lista abaixo muda a cor de todo
 // mundo — é feio, mas é o comportamento que o time já conhece.
-export const AVATAR_COLORS: readonly string[] = [
+const AVATAR_COLORS: readonly string[] = [
   "#4f46e5",
   "#7c3aed",
   "#db2777",
@@ -37,7 +37,7 @@ export const SKIPPED_COLOR = "#d97706";
 
 // noUncheckedIndexedAccess torna o acesso indexado `string | undefined`; o `??`
 // devolve um string de verdade sem precisar de `!`.
-export function paletteColor(index: number): string {
+function paletteColor(index: number): string {
   return AVATAR_COLORS[index % AVATAR_COLORS.length] ?? "#4f46e5";
 }
 

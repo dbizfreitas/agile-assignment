@@ -30,7 +30,7 @@ const NO_PHOTO_SENTINEL = "";
 // se a chamada em si falhar (rede, token, timeout) — esses dois casos
 // precisam ser distinguíveis para getCachedOrFetchPhoto aplicar o TTL
 // certo (ver comentário de NO_PHOTO_SENTINEL acima).
-export async function fetchParticipantPhoto(email: string): Promise<string> {
+async function fetchParticipantPhoto(email: string): Promise<string> {
   if (!isAllowedEmail(email)) return NO_PHOTO_SENTINEL;
 
   const { getAccessToken } = await import("./token.server");

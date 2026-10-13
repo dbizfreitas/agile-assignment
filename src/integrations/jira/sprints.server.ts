@@ -4,7 +4,7 @@ import { ALLOWED_PROJECTS } from "./config.server";
 import { getCache, setCache } from "./cache.server";
 import type { SprintResponse } from "@/lib/compromisso/types";
 
-export interface JiraSprintRaw {
+interface JiraSprintRaw {
   id: number;
   name: string;
   state: string;

@@ -104,7 +104,7 @@ const CT_COL_ORDER2 = [
  * `undefined`/`NaN` para que o TypeScript estreite o tipo — o resultado é o
  * mesmo em todos os valores possíveis (0 continua virando "0h").
  */
-export function fmtDays(d: number | undefined): string {
+function fmtDays(d: number | undefined): string {
   if (d === undefined || Number.isNaN(d)) return "—";
   const days = Math.floor(d);
   const hours = Math.round((d - days) * 24);
@@ -114,7 +114,7 @@ export function fmtDays(d: number | undefined): string {
 }
 
 /** Igual a fmtDays, mas colapsa acima de 365 dias em "2a 130d". */
-export function fmtDays2(d: number | undefined): string {
+function fmtDays2(d: number | undefined): string {
   if (d === undefined || Number.isNaN(d)) return "—";
   const totalDays = Math.floor(d);
   const hours = Math.round((d - totalDays) * 24);
@@ -182,7 +182,7 @@ export function mergeStatusVariants(
  * issues. Quando a listagem de status do projeto falha e vem `[]`, este é o
  * fallback — "ordem de aparição nas issues".
  */
-export function buildStatusOrder(
+function buildStatusOrder(
   projectStatuses: string[],
   issues: CycleTimeIssue[],
   excluded: Set<string>,

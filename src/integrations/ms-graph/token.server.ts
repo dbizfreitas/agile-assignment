@@ -14,7 +14,7 @@ interface TokenResponse {
   error_description?: string;
 }
 
-export class MsGraphAuthError extends Error {}
+class MsGraphAuthError extends Error {}
 
 export async function getAccessToken(): Promise<string> {
   if (!MS_TENANT_ID || !MS_CLIENT_ID) {

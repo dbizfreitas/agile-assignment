@@ -69,7 +69,7 @@ function makeIsCommitmentIssue(sprintStart?: string, sprintEnd?: string | null) 
 // Correção pontual para sprints já ENCERRADAS cuja label COMPROMISSO só foi
 // aplicada no Jira DEPOIS do fim da sprint (backfill manual). Mapeado por ID
 // de sprint (Jira Agile API) para a lista de chaves extraída do goal da sprint.
-export const SPRINT_COMMITMENT_OVERRIDES: Record<number, string[]> = {
+const SPRINT_COMMITMENT_OVERRIDES: Record<number, string[]> = {
   4967: [
     // PDC-26.2.5 (25/06–16/07/2026) — label aplicada retroativamente em 29/07/2026
     "PDC-1590",
@@ -105,13 +105,13 @@ export interface SprintDataLike extends SprintLike {
 const VERSIONED_COMMITMENT_FROM = [26, 4, 1];
 
 // "PDC-26.4.1", "PH - 26.4.1", "INTFLOW - 26.4.1" → [26, 4, 1]
-export function sprintVersionOf(name: string | null | undefined): number[] | null {
+function sprintVersionOf(name: string | null | undefined): number[] | null {
   const m = String(name ?? "").match(/\d{2}\.\d+\.\d+/);
   return m ? m[0].split(".").map(Number) : null;
 }
 
 // Comparação numérica parte a parte (26.10.1 > 26.4.1), não lexicográfica.
-export function compareVersions(a: number[], b: number[]): number {
+function compareVersions(a: number[], b: number[]): number {
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
     const d = (a[i] ?? 0) - (b[i] ?? 0);
     if (d !== 0) return d;
@@ -195,7 +195,7 @@ export function isStoryType(t: string): boolean {
   return STORY_TYPES.includes(t);
 }
 
-export interface SPSummaryRow {
+interface SPSummaryRow {
   label: string;
   labelHref?: string;
   items: string | number;
