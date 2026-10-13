@@ -5,7 +5,6 @@
 // runtime; o device-code flow inicial roda fora daqui, em
 // scripts/ms-graph-auth.ts (rodado localmente uma vez).
 import { MS_TENANT_ID, MS_CLIENT_ID, MS_GRAPH_SCOPE } from "./config.server";
-import { withRetroTypes } from "@/integrations/supabase/retro-types";
 
 interface TokenResponse {
   access_token?: string;
@@ -23,9 +22,8 @@ export async function getAccessToken(): Promise<string> {
   }
 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const retroAdmin = withRetroTypes(supabaseAdmin);
 
-  const { data, error } = await retroAdmin
+  const { data, error } = await supabaseAdmin
     .from("ms_graph_token")
     .select("access_token, refresh_token, expires_at")
     .eq("id", true)
@@ -62,7 +60,7 @@ export async function getAccessToken(): Promise<string> {
   }
 
   const expiresAt = new Date(now + (json.expires_in ?? 3600) * 1000 - 60_000).toISOString();
-  const { error: updateError } = await retroAdmin
+  const { error: updateError } = await supabaseAdmin
     .from("ms_graph_token")
     .update({
       access_token: json.access_token,

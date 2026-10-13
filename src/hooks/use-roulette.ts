@@ -2,11 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { withRetroTypes } from "@/integrations/supabase/retro-types";
 import type { JiraProjectKey } from "@/lib/projects";
 import type { RetroParticipant } from "./use-retro-participants";
-
-const retroSupabase = withRetroTypes(supabase);
 
 // SQLSTATE customizados das RPCs do sorteio (mesmo padrão de src/lib/admin-errors.ts).
 const ROULETTE_ERROR_MESSAGES: Record<string, string> = {
@@ -83,7 +80,7 @@ export function useRoulette(
   const stateQ = useQuery({
     queryKey: ["retro-roulette-state", project],
     queryFn: async (): Promise<RouletteState> => {
-      const { data, error } = await retroSupabase
+      const { data, error } = await supabase
         .from("retro_roulette_state")
         .select("drawn_emails, skipped_emails, last_winner_email")
         .eq("jira_project", project)
@@ -119,7 +116,7 @@ export function useRoulette(
 
   const spinMutation = useMutation({
     mutationFn: async (): Promise<string> => {
-      const { data, error } = await retroSupabase.rpc("spin_roulette", { _project: project });
+      const { data, error } = await supabase.rpc("spin_roulette", { _project: project });
       if (error) throw error;
       return data;
     },
@@ -127,7 +124,7 @@ export function useRoulette(
 
   const skipMutation = useMutation({
     mutationFn: async (email: string) => {
-      const { error } = await retroSupabase.rpc("skip_participant", {
+      const { error } = await supabase.rpc("skip_participant", {
         _project: project,
         _email: email,
       });
@@ -139,7 +136,7 @@ export function useRoulette(
 
   const unskipMutation = useMutation({
     mutationFn: async (email: string) => {
-      const { error } = await retroSupabase.rpc("unskip_participant", {
+      const { error } = await supabase.rpc("unskip_participant", {
         _project: project,
         _email: email,
       });
@@ -151,7 +148,7 @@ export function useRoulette(
 
   const unmarkMutation = useMutation({
     mutationFn: async (email: string) => {
-      const { error } = await retroSupabase.rpc("unmark_participant", {
+      const { error } = await supabase.rpc("unmark_participant", {
         _project: project,
         _email: email,
       });
@@ -163,7 +160,7 @@ export function useRoulette(
 
   const resetMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await retroSupabase.rpc("reset_roulette", { _project: project });
+      const { error } = await supabase.rpc("reset_roulette", { _project: project });
       if (error) throw error;
     },
     onSuccess: invalidateState,

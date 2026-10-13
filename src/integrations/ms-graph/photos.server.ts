@@ -5,7 +5,6 @@
 // vida longa do jira-live original).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isAllowedEmail } from "./config.server";
-import { withRetroTypes } from "@/integrations/supabase/retro-types";
 import type { Database } from "@/integrations/supabase/types";
 
 const PHOTO_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias: fotos corporativas mudam raramente
@@ -65,23 +64,21 @@ export async function fetchParticipantPhoto(email: string): Promise<string> {
 // ambiente (produção, ver getCacheWriter) e só cai no client do usuário
 // sem ela (dev local) — aí degrada graciosamente: a foto ainda é
 // retornada certa pra esta chamada, só o cache no banco não se atualiza.
-async function getCacheWriter(userClient: SupabaseClient<Database>) {
+async function getCacheWriter(userClient: SupabaseClient<Database>): Promise<SupabaseClient<Database>> {
   // Checa o env antes de tocar no supabaseAdmin: o Proxy de
   // client.server.ts lança (e loga) a cada acesso quando a chave falta.
   if (!process.env["SUPABASE_URL"] || !process.env["SUPABASE_SERVICE_ROLE_KEY"]) {
-    return withRetroTypes(userClient);
+    return userClient;
   }
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return withRetroTypes(supabaseAdmin);
+  return supabaseAdmin;
 }
 
 export async function getCachedOrFetchPhoto(
   email: string,
   client: SupabaseClient<Database>,
 ): Promise<string | null> {
-  const retroClient = withRetroTypes(client);
-
-  const { data, error } = await retroClient
+  const { data, error } = await client
     .from("retro_participants")
     .select("photo_data_url, photo_fetched_at")
     .eq("email", email)
