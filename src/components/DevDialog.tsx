@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
@@ -42,6 +42,7 @@ import {
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
 import { useReorderDevs } from "@/hooks/use-reorder-devs";
+import { useTeamsQuery } from "@/hooks/use-board-queries";
 import { TeamColorSwatches, TeamSelectOption } from "@/components/TeamPickerControls";
 
 const NEW_TEAM = "__new__";
@@ -83,23 +84,10 @@ export function DevDialog({
   const [orderIndex, setOrderIndex] = useState(0);
   const reorderDevs = useReorderDevs(project);
 
-  // MESMA queryKey do BoardGrid, de propósito: chaves diferentes fariam os dois
-  // componentes brigarem pela mesma entrada de cache e o diálogo listaria times
-  // do projeto errado. Como só existem times do projeto atual na lista, mover
-  // uma pessoa para um time de outro projeto é impossível pela tela — e a FK
-  // composta cobre o resto.
-  const teamsQ = useQuery({
-    queryKey: ["board", "teams", project],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("teams")
-        .select("*")
-        .eq("jira_project", project)
-        .order("position");
-      if (error) throw error;
-      return data as Team[];
-    },
-  });
+  // Mesma consulta do BoardGrid (use-board-queries.ts). Como só existem times
+  // do projeto atual na lista, mover uma pessoa para um time de outro projeto
+  // é impossível pela tela — e a FK composta cobre o resto.
+  const teamsQ = useTeamsQuery(project);
   const teams = teamsQ.data ?? [];
 
   useEffect(() => {

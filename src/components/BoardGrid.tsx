@@ -58,6 +58,7 @@ import type { BoardSearch } from "@/lib/board-search";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
 import { ticketUrlProblem } from "@/lib/tickets";
+import { useDevsQuery, useTeamsQuery } from "@/hooks/use-board-queries";
 import { useReorderDevs } from "@/hooks/use-reorder-devs";
 import { useReorderAllocations } from "@/hooks/use-reorder-allocations";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
@@ -184,37 +185,10 @@ export function BoardGrid({
 
   // As quatro queries são `select("*")` planas com um `.eq("jira_project", …)`
   // cada — sem `!inner`, sem query dependente: `devs` e `allocations` têm o
-  // projeto denormalizado, derivado do pai por trigger no banco.
-  //
-  // O projeto entra na queryKey obrigatoriamente. DevDialog usa a MESMA chave
-  // de `teams`; se as duas divergissem, os dois componentes brigariam pela
-  // mesma entrada de cache e o diálogo listaria times do projeto errado.
-  const devsQ = useQuery({
-    queryKey: ["board", "devs", project],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("devs")
-        .select("*")
-        .eq("jira_project", project)
-        .order("position")
-        .order("name");
-      if (error) throw error;
-      return data as Dev[];
-    },
-  });
-
-  const teamsQ = useQuery({
-    queryKey: ["board", "teams", project],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("teams")
-        .select("*")
-        .eq("jira_project", project)
-        .order("position");
-      if (error) throw error;
-      return data as Team[];
-    },
-  });
+  // projeto denormalizado, derivado do pai por trigger no banco. `devs` e
+  // `teams` vêm de hooks compartilhados com os diálogos (use-board-queries.ts).
+  const devsQ = useDevsQuery(project);
+  const teamsQ = useTeamsQuery(project);
 
   const sprintsQ = useQuery({
     queryKey: ["board", "sprints", project],
