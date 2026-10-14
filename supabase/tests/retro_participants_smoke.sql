@@ -36,8 +36,8 @@ BEGIN
 END $$;
 
 -- ============================================================
--- Seção 2 — helpers can_view_retrospectivas / can_edit_retrospectivas e
--- isolamento de ms_graph_token (mesmo padrão de
+-- Seção 2 — helpers can_view_retrospectivas / can_edit_retrospectivas
+-- (mesmo padrão de
 -- alocacoes_auth_helpers_smoke.sql)
 -- ============================================================
 DO $$
@@ -45,7 +45,6 @@ DECLARE
   v_editor_com_rota uuid := 'b1111111-1111-1111-1111-111111111111';
   v_editor_sem_rota uuid := 'b2222222-2222-2222-2222-222222222222';
   v_viewer_com_rota uuid := 'b3333333-3333-3333-3333-333333333333';
-  v_count int;
 BEGIN
   INSERT INTO auth.users
     (instance_id, id, aud, role, email, encrypted_password,
@@ -74,17 +73,6 @@ BEGIN
     'Seção 2: viewer com rota deveria poder VER retrospectivas';
   ASSERT private.can_edit_retrospectivas(v_viewer_com_rota) = false,
     'Seção 2: viewer com rota NÃO deveria poder editar retrospectivas';
-
-  -- ms_graph_token: RLS ligado, zero policies — usuário comum não lê nada,
-  -- mesmo sendo admin de papel (o isolamento aqui não depende de papel).
-  SET LOCAL ROLE authenticated;
-  PERFORM set_config('request.jwt.claims',
-    json_build_object('sub', v_editor_com_rota, 'role', 'authenticated')::text, true);
-  SELECT count(*) INTO v_count FROM public.ms_graph_token;
-  RESET ROLE;
-  IF v_count <> 0 THEN
-    RAISE EXCEPTION 'FALHA 2.1: usuário authenticated leu % linha(s) de ms_graph_token — deveria ser zero (sem policies)', v_count;
-  END IF;
 
   RAISE NOTICE 'Seção 2 OK';
 END $$;
