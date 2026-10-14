@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import {
   TEAM_COLORS,
+  demandasPhrase,
   initialsFrom,
   moveInTeam,
   renumberChanges,
@@ -46,10 +47,6 @@ import { useTeamsQuery } from "@/hooks/use-board-queries";
 import { TeamColorSwatches, TeamSelectOption } from "@/components/TeamPickerControls";
 
 const NEW_TEAM = "__new__";
-
-function demandasPhrase(n: number) {
-  return n === 1 ? "1 demanda" : `${n} demandas`;
-}
 
 export function DevDialog({
   dev,

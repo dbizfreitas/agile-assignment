@@ -30,14 +30,10 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
-import type { Sprint } from "@/lib/board";
+import { demandasPhrase, type Sprint } from "@/lib/board";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
 import { QUARTERS, isValidQuarter, sprintIssues } from "@/lib/sprint-validation";
-
-function demandasPhrase(n: number) {
-  return n === 1 ? "1 demanda" : `${n} demandas`;
-}
 
 // Só é chamado com fim >= início (o diálogo barra o caso invertido antes).
 // O antigo Math.max(1, …) mascarava a inversão como "1 dias corridos".

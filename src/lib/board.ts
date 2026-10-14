@@ -391,3 +391,8 @@ export function sameWeeks(
   if (a.week_start !== b.week_start) return false;
   return (a.week_end ?? a.week_start) === (b.week_end ?? b.week_start);
 }
+
+/** "1 demanda" / "N demandas", usado nos avisos de exclusão dos diálogos. */
+export function demandasPhrase(n: number) {
+  return n === 1 ? "1 demanda" : `${n} demandas`;
+}
