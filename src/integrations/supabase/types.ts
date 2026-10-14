@@ -181,30 +181,6 @@ export type Database = {
         }
         Relationships: []
       }
-      ms_graph_token: {
-        Row: {
-          access_token: string | null
-          expires_at: string | null
-          id: boolean
-          refresh_token: string | null
-          updated_at: string
-        }
-        Insert: {
-          access_token?: string | null
-          expires_at?: string | null
-          id?: boolean
-          refresh_token?: string | null
-          updated_at?: string
-        }
-        Update: {
-          access_token?: string | null
-          expires_at?: string | null
-          id?: boolean
-          refresh_token?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
       retro_participants: {
         Row: {
           color: string | null
