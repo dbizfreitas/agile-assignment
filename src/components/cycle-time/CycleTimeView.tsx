@@ -8,27 +8,12 @@ import { getJiraCycleTime } from "@/integrations/jira/server-fns";
 import { CYCLE_TIME_CONFIG, buildColumns, mergeStatusVariants } from "@/lib/cycle-time/calc";
 import type { CycleTimeIssue, CycleTimeMode, CycleTimeResponse } from "@/lib/cycle-time/types";
 import type { JiraProjectKey } from "@/lib/projects";
+import { ls, save } from "@/lib/local-storage";
 import { useShell } from "@/components/shell/shell-context";
 import { CycleTimeTable } from "./CycleTimeTable";
 
 /** Sub-visão ativa. Nomes do original (localStorage `ctView`). */
 type CycleTimeSubView = "status" | "full";
-
-const ls = (key: string) => {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-};
-
-const save = (key: string, value: string) => {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // ignore
-  }
-};
 
 const LS_VIEW = "cycleTimeView";
 

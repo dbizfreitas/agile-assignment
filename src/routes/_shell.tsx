@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { getJiraProjects } from "@/integrations/jira/server-fns";
 import { JIRA_PROJECTS, isJiraProjectKey, type JiraProjectKey } from "@/lib/projects";
+import { ls, save } from "@/lib/local-storage";
 import type { ProjectOption } from "@/components/ProjectSelect";
 import { AppShell } from "@/components/shell/AppShell";
 import { TABS } from "@/components/shell/tabs";
@@ -22,22 +23,6 @@ import { ShellProvider } from "@/components/shell/shell-context";
  * custo de leitura.
  */
 const LS_PROJECT = "lastProject";
-
-const ls = (key: string) => {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-};
-
-const save = (key: string, value: string) => {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // ignore
-  }
-};
 
 /**
  * Resolução SÍNCRONA e sempre válida: chave inválida no `localStorage` cai no

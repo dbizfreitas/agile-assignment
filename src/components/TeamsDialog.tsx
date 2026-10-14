@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/
 import { toast } from "sonner";
 import { ChevronDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
 import { TEAM_COLORS, type Dev, type Team } from "@/lib/board";
+import { useDevsQuery, useTeamsQuery } from "@/hooks/use-board-queries";
 import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
 import { TeamColorSwatches, TeamSelectOption } from "@/components/TeamPickerControls";
@@ -41,44 +42,10 @@ export function TeamsDialog({
 }) {
   const qc = useQueryClient();
 
-  // MESMA queryKey do BoardGrid e do DevDialog, de propósito: chaves
-  // diferentes fariam os componentes brigarem pela mesma entrada de cache e
-  // este diálogo listaria times do projeto errado (ver DevDialog.tsx:52-56).
-  const teamsQ = useQuery({
-    queryKey: ["board", "teams", project],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("teams")
-        .select("*")
-        .eq("jira_project", project)
-        .order("position");
-      if (error) throw error;
-      return data as Team[];
-    },
-  });
+  const teamsQ = useTeamsQuery(project);
   const teams = teamsQ.data ?? [];
 
-  // MESMA queryKey de devs do BoardGrid, de propósito — e por isso o select,
-  // os filtros, a ordenação e o cast precisam ser IDÊNTICOS aos de lá. O
-  // TanStack Query v5 guarda uma única entrada por chave e usa a `queryFn`
-  // do observer que renderizou por último; se este diálogo registrasse um
-  // select mais estreito sob a mesma chave, um refetch em segundo plano
-  // disparado com o diálogo aberto rodaria essa versão e sobrescreveria o
-  // cache com linhas parciais, derrubando os campos que o grid e o DevDialog
-  // dependem para renderizar, ordenar e montar payloads de mutação.
-  const devsQ = useQuery({
-    queryKey: ["board", "devs", project],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("devs")
-        .select("*")
-        .eq("jira_project", project)
-        .order("position")
-        .order("name");
-      if (error) throw error;
-      return data as Dev[];
-    },
-  });
+  const devsQ = useDevsQuery(project);
   const counts = useMemo(() => {
     const list = devsQ.data ?? [];
     const map = new Map<string, number>();

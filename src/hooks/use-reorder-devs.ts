@@ -11,8 +11,8 @@ import { boardErrorMessage } from "@/lib/board-errors";
  */
 export function useReorderDevs(project: JiraProjectKey) {
   const qc = useQueryClient();
-  // Mesma chave de BoardGrid/DevDialog/TeamsDialog: as linhas do cache devem
-  // continuar sendo `Dev` completos.
+  // Mesma chave de useDevsQuery (use-board-queries.ts): as linhas do cache
+  // devem continuar sendo `Dev` completos.
   const key = ["board", "devs", project] as const;
 
   return useMutation({
