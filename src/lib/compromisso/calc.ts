@@ -53,7 +53,7 @@ export function sprintDoneBound(sprintData?: SprintLike | null): string | null {
   return sprintData.completeDate ?? sprintData.endDate ?? null;
 }
 
-function makeIsCommitmentIssue(sprintStart?: string, sprintEnd?: string | null) {
+function makeIsCommitmentIssue(sprintStart?: string) {
   return (issue: IssueResponse) => {
     if (!labelsOf(issue).includes(COMMIT_LABEL)) return false;
     const committedAt = issue?.commitmentAt;
@@ -133,7 +133,7 @@ export function makeIsCommitmentIssueForSprint(sprintData?: SprintDataLike | nul
   }
   const versioned = versionedCommitmentLabel(sprintData);
   if (versioned) return (issue: IssueResponse) => labelsOf(issue).includes(versioned);
-  return makeIsCommitmentIssue(sprintData?.startDate, sprintDoneBound(sprintData));
+  return makeIsCommitmentIssue(sprintData?.startDate);
 }
 
 // Lista única das issues de compromisso da sprint — fonte do burndown e dos
