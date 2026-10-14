@@ -51,7 +51,7 @@ JavaScript servido a qualquer visitante do site. A proteção dos dados vem de
 RLS no Supabase, não do sigilo desses valores.
 
 **Nunca coloque em `.env`:** `SUPABASE_SERVICE_ROLE_KEY` (bypassa RLS por
-completo), `MS_TENANT_ID`, `MS_CLIENT_ID`, `JIRA_API_TOKEN`, ou qualquer
+completo), `JIRA_API_TOKEN`, ou qualquer
 credencial. Esses vão em `.env.local`, que é gitignored e tem precedência
 sobre o `.env` no Vite.
 
@@ -65,7 +65,6 @@ sobe normalmente, mas o recurso correspondente fica indisponível:
 |---|---|---|
 | `JIRA_EMAIL` + `JIRA_API_TOKEN` | Abas Compromisso e Cycle Time: *"Credenciais do Jira não configuradas no servidor"* | `.env.local` (local) e painel do Lovable (produção) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Rotas administrativas | idem |
-| `MS_TENANT_ID` + `MS_CLIENT_ID` | Fotos da roleta de Retrospectivas (cai no fallback de iniciais) | idem |
 
 Para o **preview publicado**, configure-as no painel do Lovable em
 Project Settings → Environment Variables. Elas não podem vir do git: o
@@ -84,17 +83,24 @@ aplique cada arquivo (em ordem de timestamp) colando o SQL no SQL Editor do
 projeto Supabase, e rode o smoke test correspondente em `supabase/tests/`
 para confirmar.
 
-**Retrospectivas (participantes/sorteio no banco, issue #24):** além das
-migrations, a foto de cada participante vem do Microsoft Graph e exige
-configuração única:
+**Retrospectivas (participantes/sorteio no banco, issue #24):** aplicar
+`supabase/migrations/20260902180000_retro_participants_foundation.sql`,
+`20260902181000_retro_ms_graph_token.sql` e `20260902182000_retro_roulette_rpcs.sql`
+(nessa ordem), depois rodar `supabase/tests/retro_participants_smoke.sql`.
+A tabela criada pela segunda é removida mais tarde por
+`20261014180000_drop_ms_graph_token.sql` (#106); aplique essa depois do
+deploy do front.
 
-1. Aplicar `supabase/migrations/20260902180000_retro_participants_foundation.sql`,
-   `20260902181000_retro_ms_graph_token.sql` e `20260902182000_retro_roulette_rpcs.sql`
-   (nessa ordem), depois rodar `supabase/tests/retro_participants_smoke.sql`.
-2. Criar um `.env.local` (nunca commitar em `.env`) com `MS_TENANT_ID`,
-   `MS_CLIENT_ID` (credenciais do app registration já usado pelo `jira-live`),
-   `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Project Settings
-   → API → service_role).
-3. Rodar `npm run ms-graph:auth` uma vez, acessar o link mostrado e digitar
-   o código — isso grava o token OAuth em `public.ms_graph_token`. Sem isso
-   a guia funciona normalmente, só sem fotos (cai no fallback de iniciais).
+**Fotos da roleta:** são gravadas à mão em
+`retro_participants.photo_data_url`, como data-URI JPEG 120×120. A foto de
+cada pessoa sai do Outlook Web (outlook.office.com/people), e o `UPDATE` roda
+no SQL Editor:
+
+    UPDATE public.retro_participants
+    SET photo_data_url = 'data:image/jpeg;base64,...', photo_fetched_at = now()
+    WHERE email = 'pessoa@way2.com.br';
+
+Quem não tem foto no diretório recebe `''`, o marcador de "sem foto".
+Enquanto ninguém grava, a pessoa aparece com as iniciais. A busca automática
+pelo Microsoft Graph foi removida na #106: o login entre tenants é
+bloqueado (AADSTS500213).
