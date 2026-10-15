@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext } from "react";
 import type { JiraProjectKey } from "@/lib/projects";
 import type { AppRoute } from "./tabs";
 
@@ -24,15 +24,9 @@ export type ShellContextValue = {
 
 const ShellContext = createContext<ShellContextValue | null>(null);
 
-export function ShellProvider({
-  value,
-  children,
-}: {
-  value: ShellContextValue;
-  children: ReactNode;
-}) {
-  return <ShellContext.Provider value={value}>{children}</ShellContext.Provider>;
-}
+// Alias do Provider, e não um componente próprio: assim este arquivo não exporta
+// componente junto com o hook, o que quebraria o Fast Refresh.
+export const ShellProvider = ShellContext.Provider;
 
 export function useShell(): ShellContextValue {
   const ctx = useContext(ShellContext);

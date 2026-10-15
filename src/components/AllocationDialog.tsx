@@ -38,13 +38,13 @@ import {
   hasSpecStatus,
   sprintWeeks,
   weekLabel,
-  type Allocation,
   type AllocationStatus,
   type AllocationTicket,
   type AllocationTipo,
   type Sprint,
 } from "@/lib/board";
 import type { JiraProjectKey } from "@/lib/projects";
+import type { AllocationDraft } from "@/lib/allocation-draft";
 import { boardErrorMessage } from "@/lib/board-errors";
 import {
   extractJiraKey,
@@ -59,19 +59,6 @@ import {
   ticketUrlProblem,
 } from "@/lib/tickets";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-
-export type AllocationDraft = {
-  id?: string;
-  sprint_id: string;
-  dev_id: string;
-  title?: string;
-  tickets?: AllocationTicket[];
-  status?: AllocationStatus;
-  tipo?: AllocationTipo;
-  notes?: string | null;
-  week_start?: number | null;
-  week_end?: number | null;
-};
 
 // O Radix Select não aceita `value=""`, então "Sem semana" usa um sentinela.
 const NO_WEEK = "none";
@@ -785,19 +772,4 @@ export function AllocationDialog({
       </AlertDialog>
     </>
   );
-}
-
-export function toDraft(a: Allocation): AllocationDraft {
-  return {
-    id: a.id,
-    sprint_id: a.sprint_id,
-    dev_id: a.dev_id,
-    title: a.title,
-    tickets: a.tickets,
-    status: a.status,
-    tipo: a.tipo,
-    notes: a.notes,
-    week_start: a.week_start,
-    week_end: a.week_end,
-  };
 }
