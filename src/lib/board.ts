@@ -22,7 +22,6 @@ export type Dev = {
   initials: string;
   team_id: string;
   position: number;
-  active: boolean;
   jira_project: JiraProjectKey;
   /**
    * Janela de disponibilidade (issue #2). `null` desliga o lado
