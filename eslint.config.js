@@ -11,7 +11,7 @@ export default tseslint.config(
       "dist",
       ".output",
       ".vinxi",
-      // Gerados pelo Lovable/Supabase e sobrescritos a cada sincronizaÁ„o; n„o editar ‡ m„o
+      // Gerados pelo Lovable/Supabase e sobrescritos a cada sincroniza√ß√£o; n√£o editar √† m√£o
       "src/integrations/supabase/client.ts",
       "src/integrations/supabase/client.server.ts",
       "src/integrations/supabase/auth-attacher.ts",
