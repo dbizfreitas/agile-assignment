@@ -82,33 +82,35 @@ export function AuditLog() {
       </p>
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
         <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-40">Quando</TableHead>
-            <TableHead className="w-28">Ação</TableHead>
-            <TableHead>Alvo</TableHead>
-            <TableHead>Responsável</TableHead>
-            <TableHead className="w-44">Mudança</TableHead>
-            <TableHead className="w-32">Rota</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {entries.map((e) => (
-            <TableRow key={e.id}>
-              <TableCell className="text-sm text-muted-foreground">
-                {new Date(e.created_at).toLocaleString("pt-BR")}
-              </TableCell>
-              <TableCell className="text-sm">{ACTION_LABELS[e.action]}</TableCell>
-              <TableCell className="text-sm">{e.target_email ?? "—"}</TableCell>
-              <TableCell className="text-sm">
-                {e.actor_email ?? <span className="text-muted-foreground">fora da aplicação</span>}
-              </TableCell>
-              <TableCell className="text-sm">{changeLabel(e)}</TableCell>
-              <TableCell className="text-sm">{routeLabel(e)}</TableCell>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-40">Quando</TableHead>
+              <TableHead className="w-28">Ação</TableHead>
+              <TableHead>Alvo</TableHead>
+              <TableHead>Responsável</TableHead>
+              <TableHead className="w-44">Mudança</TableHead>
+              <TableHead className="w-32">Rota</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {entries.map((e) => (
+              <TableRow key={e.id}>
+                <TableCell className="text-sm text-muted-foreground">
+                  {new Date(e.created_at).toLocaleString("pt-BR")}
+                </TableCell>
+                <TableCell className="text-sm">{ACTION_LABELS[e.action]}</TableCell>
+                <TableCell className="text-sm">{e.target_email ?? "—"}</TableCell>
+                <TableCell className="text-sm">
+                  {e.actor_email ?? (
+                    <span className="text-muted-foreground">fora da aplicação</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-sm">{changeLabel(e)}</TableCell>
+                <TableCell className="text-sm">{routeLabel(e)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

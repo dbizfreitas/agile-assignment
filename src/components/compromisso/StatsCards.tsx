@@ -100,9 +100,7 @@ export function StatsCards({
             value={commitDoneSP}
             sub={`${commitDoneItems.length} item${commitDoneItems.length !== 1 ? "s" : ""}`}
             onClick={
-              commitDoneItems.length
-                ? () => openJql(commitDoneItems.map((i) => i.key))
-                : undefined
+              commitDoneItems.length ? () => openJql(commitDoneItems.map((i) => i.key)) : undefined
             }
           />
           <StatCard

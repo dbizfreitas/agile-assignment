@@ -9,22 +9,26 @@ const ALLOWED_REDIRECT = [
 ];
 
 export async function exchangeMicrosoftCode(code: string, redirectUri: string) {
-  if (!ALLOWED_REDIRECT.some((r) => r.test(redirectUri))) throw new Error("Redirecionamento inválido");
+  if (!ALLOWED_REDIRECT.some((r) => r.test(redirectUri)))
+    throw new Error("Redirecionamento inválido");
   const secret = process.env["AZURE_CLIENT_SECRET"]?.trim();
   if (!secret) throw new Error("Login Microsoft não configurado no servidor");
 
-  const res = await fetch(`https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: AZURE_CLIENT_ID,
-      client_secret: secret,
-      code,
-      redirect_uri: redirectUri,
-      grant_type: "authorization_code",
-      scope: AZURE_SCOPES,
-    }),
-  });
+  const res = await fetch(
+    `https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/token`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: AZURE_CLIENT_ID,
+        client_secret: secret,
+        code,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+        scope: AZURE_SCOPES,
+      }),
+    },
+  );
   if (!res.ok) {
     console.error("[sso] token exchange", res.status, await res.text());
     throw new Error("A Microsoft recusou o login. Tente novamente.");
@@ -34,13 +38,18 @@ export async function exchangeMicrosoftCode(code: string, redirectUri: string) {
 
   // Token obtido server-to-server via TLS direto da Microsoft; validamos as claims.
   const payload = JSON.parse(
-    Buffer.from(tokens.id_token.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString(),
+    Buffer.from(
+      tokens.id_token.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/"),
+      "base64",
+    ).toString(),
   ) as Record<string, string | number | undefined>;
   if (payload["aud"] !== AZURE_CLIENT_ID) throw new Error("Token inválido");
   if (!String(payload["iss"] ?? "").includes(AZURE_TENANT_ID)) throw new Error("Token inválido");
   if (Number(payload["exp"] ?? 0) < Date.now() / 1000) throw new Error("Token expirado");
 
-  const email = String(payload["email"] ?? payload["preferred_username"] ?? "").toLowerCase().trim();
+  const email = String(payload["email"] ?? payload["preferred_username"] ?? "")
+    .toLowerCase()
+    .trim();
   const domain = email.slice(email.lastIndexOf("@") + 1);
   if (!email.includes("@") || !ALLOWED_DOMAINS.has(domain)) {
     throw new Error("Apenas contas corporativas Way2 podem entrar.");
@@ -69,7 +78,9 @@ export async function exchangeMicrosoftCode(code: string, redirectUri: string) {
   }
 
   // Papel leitor + guia Alocações numa única transação; quem já tem papel (convite/admin) não é tocado.
-  const { error: provisionError } = await supabaseAdmin.rpc("provision_sso_user", { p_user_id: userId });
+  const { error: provisionError } = await supabaseAdmin.rpc("provision_sso_user", {
+    p_user_id: userId,
+  });
   if (provisionError) {
     console.error("[sso] provision", provisionError);
     throw new Error("Não foi possível liberar seu acesso. Tente novamente.");
