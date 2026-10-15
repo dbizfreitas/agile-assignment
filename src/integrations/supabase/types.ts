@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
@@ -405,10 +405,7 @@ export type Database = {
         Args: { _target?: string; _team: string }
         Returns: undefined
       }
-      provision_sso_user: {
-        Args: { p_user_id: string }
-        Returns: boolean
-      }
+      provision_sso_user: { Args: { p_user_id: string }; Returns: boolean }
       reset_roulette: { Args: { _project: string }; Returns: undefined }
       set_user_role: {
         Args: {
