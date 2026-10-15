@@ -63,7 +63,8 @@ import { useReorderDevs } from "@/hooks/use-reorder-devs";
 import { useReorderAllocations } from "@/hooks/use-reorder-allocations";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AllocationDialog, toDraft, type AllocationDraft } from "./AllocationDialog";
+import { AllocationDialog } from "./AllocationDialog";
+import { toDraft, type AllocationDraft } from "@/lib/allocation-draft";
 import { DevDialog } from "./DevDialog";
 import { SprintDialog } from "./SprintDialog";
 import { TeamsDialog } from "./TeamsDialog";
@@ -223,8 +224,10 @@ export function BoardGrid({
     },
   });
 
-  const teams = teamsQ.data ?? [];
-  const sprints = sprintsQ.data ?? [];
+  // Memoizados: `?? []` sozinho cria um array novo a cada render enquanto a
+  // query não tem dado, e isso invalidaria os useMemo que dependem deles.
+  const teams = useMemo(() => teamsQ.data ?? [], [teamsQ.data]);
+  const sprints = useMemo(() => sprintsQ.data ?? [], [sprintsQ.data]);
 
   // Anos com pelo menos uma sprint, mais o ano corrente sempre presente — sem
   // isso, o valor padrão do dropdown (ano corrente) poderia não ter opção
@@ -242,7 +245,7 @@ export function BoardGrid({
     [sprints, yearFilter],
   );
 
-  const allocations = allocQ.data ?? [];
+  const allocations = useMemo(() => allocQ.data ?? [], [allocQ.data]);
 
   // O projeto do cartão é recalculado pelo trigger a cada movimento, e
   // allocations_sprint_project_fkey valida o destino. As semanas vêm cortadas
