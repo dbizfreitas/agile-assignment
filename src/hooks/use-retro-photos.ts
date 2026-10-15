@@ -4,7 +4,8 @@ import { getParticipantPhoto } from "@/integrations/retro/server-fns";
 // Uma query por e-mail (cacheada individualmente pelo react-query,
 // staleTime alto: a foto só muda quando alguém grava outra à mão) em vez
 // de uma chamada em lote: assim cada foto aparece assim que chega, sem
-// esperar a mais lenta do grupo, e falhas isoladas (pessoa sem foto gravada) não derrubam as demais.
+// esperar a mais lenta do grupo, e falhas isoladas (pessoa sem foto
+// gravada) não derrubam as demais.
 export function useRetroPhotos(emails: readonly string[]): Record<string, string | undefined> {
   const results = useQueries({
     queries: emails.map((email) => ({

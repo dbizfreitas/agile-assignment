@@ -37,8 +37,7 @@ END $$;
 
 -- ============================================================
 -- Seção 2 — helpers can_view_retrospectivas / can_edit_retrospectivas
--- (mesmo padrão de
--- alocacoes_auth_helpers_smoke.sql)
+-- (mesmo padrão de alocacoes_auth_helpers_smoke.sql)
 -- ============================================================
 DO $$
 DECLARE
