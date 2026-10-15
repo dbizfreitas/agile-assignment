@@ -1035,14 +1035,16 @@ function SprintRow({
               if (id) onDrop(id, d.id);
             }}
             style={
-              hasWeeked ? {
+              hasWeeked
+                ? {
                     ...spanStyle,
                     display: "grid",
                     gridTemplateRows: "subgrid",
                     // Coluna única limitada: sem isto a coluna implícita (auto) cresce até o
                     // min-content e notas/tickets longos vazam sobre as colunas vizinhas.
                     gridTemplateColumns: "minmax(0, 1fr)",
-                  } : undefined
+                  }
+                : undefined
             }
             className={`group/cell relative border-b border-r border-grid-line p-1.5 last:border-r-0 ${
               hasWeeked ? "" : "flex flex-col gap-1"

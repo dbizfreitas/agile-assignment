@@ -41,10 +41,16 @@ function AuthCallback() {
         const state = q.get("state");
         const stored = sessionStorage.getItem(AZURE_STATE_KEY);
         sessionStorage.removeItem(AZURE_STATE_KEY);
-        if (!code || !state || state !== stored) throw new Error("Falha na validação de segurança. Tente novamente.");
+        if (!code || !state || state !== stored)
+          throw new Error("Falha na validação de segurança. Tente novamente.");
 
-        const { tokenHash } = await completeMicrosoftLogin({ data: { code, redirectUri: azureRedirectUri() } });
-        const { error: otpError } = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
+        const { tokenHash } = await completeMicrosoftLogin({
+          data: { code, redirectUri: azureRedirectUri() },
+        });
+        const { error: otpError } = await supabase.auth.verifyOtp({
+          type: "magiclink",
+          token_hash: tokenHash,
+        });
         if (otpError) throw otpError;
 
         const back = safePath(sessionStorage.getItem(AZURE_RETURN_KEY));

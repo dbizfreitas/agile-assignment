@@ -1,2 +1,10 @@
-# Arquivo gerado pelo TanStack Router sempre com LF; evita aparecer como modificado no Windows
-src/routeTree.gen.ts text eol=lf
+# Fixa LF em todo o repositório (evita CRLF no Windows com core.autocrlf=true)
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary

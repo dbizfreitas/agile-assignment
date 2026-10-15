@@ -6,7 +6,11 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { LayoutGrid } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { AZURE_RETURN_KEY, AZURE_STATE_KEY, buildAzureAuthorizeUrl } from "@/integrations/azure/config";
+import {
+  AZURE_RETURN_KEY,
+  AZURE_STATE_KEY,
+  buildAzureAuthorizeUrl,
+} from "@/integrations/azure/config";
 
 function MicrosoftIcon() {
   return (
@@ -62,7 +66,13 @@ export function AuthCard() {
           </div>
         </div>
 
-        <Button type="button" variant="outline" className="w-full" onClick={microsoft} disabled={msBusy || busy}>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={microsoft}
+          disabled={msBusy || busy}
+        >
           <MicrosoftIcon />
           <span className="ml-2">{msBusy ? "Redirecionando..." : "Entrar com Microsoft"}</span>
         </Button>
@@ -103,7 +113,8 @@ export function AuthCard() {
         </form>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          Colaboradores Way2 entram com a conta Microsoft. Usuários já cadastrados podem usar e-mail e senha.
+          Colaboradores Way2 entram com a conta Microsoft. Usuários já cadastrados podem usar e-mail
+          e senha.
         </p>
       </div>
     </div>
