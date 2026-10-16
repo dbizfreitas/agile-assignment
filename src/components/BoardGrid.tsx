@@ -1051,7 +1051,11 @@ function SprintRow({
             }
             className={`group/cell relative border-b border-r border-grid-line p-1.5 last:border-r-0 ${
               hasWeeked ? "" : "flex flex-col gap-1"
-            } ${available ? "" : "cursor-not-allowed bg-muted-foreground/15"} ${
+            } ${
+              available
+                ? ""
+                : "cursor-not-allowed bg-muted-foreground/40 bg-[repeating-linear-gradient(135deg,transparent_0_6px,color-mix(in_srgb,var(--muted-foreground)_12%,transparent)_6px_7px)]"
+            } ${
               dragOver === key ? "bg-primary/10 ring-1 ring-inset ring-primary" : ""
             }`}
           >
