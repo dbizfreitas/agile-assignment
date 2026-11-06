@@ -15,6 +15,8 @@ import {
   CalendarPlus,
   Copy,
   ExternalLink,
+  Eye,
+  EyeOff,
   Loader2,
   Pencil,
   Plus,
@@ -59,6 +61,8 @@ import type { JiraProjectKey } from "@/lib/projects";
 import { boardErrorMessage } from "@/lib/board-errors";
 import { ticketUrlProblem } from "@/lib/tickets";
 import { useDevsQuery, useTeamsQuery } from "@/hooks/use-board-queries";
+import { useBoardVisibility } from "@/hooks/use-board-visibility";
+import { hiddenCount, isDevHidden } from "@/lib/board-visibility";
 import { useReorderDevs } from "@/hooks/use-reorder-devs";
 import { useReorderAllocations } from "@/hooks/use-reorder-allocations";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
@@ -74,6 +78,9 @@ import { TeamsDialog } from "./TeamsDialog";
 // garante o período da sprint em uma linha (#94).
 const SPRINT_COL_MIN_PX = 144;
 const DEV_COL_MIN_PX = 152;
+// Pessoa oculta (#124) vira uma faixa estreita, não some: a faixa avisa que há
+// uma coluna ali e é o clique para exibi-la de volta.
+const HIDDEN_COL_PX = 28;
 
 // MIME próprio para arrastar a coluna da pessoa (#83). Separado de
 // "text/allocation" para que o arraste de coluna nunca seja confundido com o de
@@ -377,6 +384,14 @@ export function BoardGrid({
     });
   }, [devsQ.data, teamPosition]);
 
+  // Visibilidade das colunas (#124). `devs` segue sendo a lista COMPLETA: a
+  // reordenação por arraste, as contagens dos diálogos e o estado vazio
+  // dependem dela. Só o desenho da grade usa `hidden`/`visibleDevs`.
+  const visibility = useBoardVisibility(project);
+  const hidden = (d: Dev) => isDevHidden(d, visibility.vis);
+  const visibleDevs = devs.filter((d) => !hidden(d));
+  const hiddenDevsCount = hiddenCount(devs, visibility.vis);
+
   const term = normalizeSearchText(search);
   const matches = (a: Allocation) => {
     // Férias não tem status: some quando há filtro de status específico.
@@ -553,6 +568,53 @@ export function BoardGrid({
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Ocultar times/pessoas (#124) também é visualização: vale para
+                leitor e editor. Um chip por time, na ordem das colunas. */}
+            {teams.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">Times</span>
+                {teams.map((t) => {
+                  const teamDevs = devs.filter((d) => d.team_id === t.id);
+                  const teamHidden = visibility.vis.teams.includes(t.id);
+                  // Time visível, mas com parte das pessoas ocultas.
+                  const partial = teamHidden
+                    ? 0
+                    : teamDevs.filter((d) => visibility.vis.devs.includes(d.id)).length;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      aria-pressed={!teamHidden}
+                      onClick={() => visibility.toggleTeam(t.id, teamDevs)}
+                      className={`inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 text-xs font-medium hover:bg-secondary ${
+                        teamHidden ? "text-muted-foreground line-through" : ""
+                      }`}
+                    >
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: teamHidden ? "#94a3b8" : t.color }}
+                      />
+                      {t.name}
+                      {partial > 0 ? (
+                        <span className="text-[11px] font-normal text-muted-foreground">
+                          · {partial}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+                {hiddenDevsCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={visibility.showAll}
+                    className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                  >
+                    Exibir todos ({hiddenDevsCount})
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-4 py-2">
@@ -631,8 +693,17 @@ export function BoardGrid({
                   // quando a soma dos mínimos não cabe, e é isso que liga o
                   // scroll horizontal. Em telas largas as colunas continuam
                   // esticando (`1fr`) e preenchem o espaço.
-                  minWidth: SPRINT_COL_MIN_PX + devs.length * DEV_COL_MIN_PX,
-                  gridTemplateColumns: `minmax(${SPRINT_COL_MIN_PX}px, 1fr) repeat(${devs.length}, minmax(${DEV_COL_MIN_PX}px, 1fr))`,
+                  // Pessoa oculta ocupa só `HIDDEN_COL_PX` (#124).
+                  minWidth:
+                    SPRINT_COL_MIN_PX +
+                    visibleDevs.length * DEV_COL_MIN_PX +
+                    hiddenDevsCount * HIDDEN_COL_PX,
+                  gridTemplateColumns: [
+                    `minmax(${SPRINT_COL_MIN_PX}px, 1fr)`,
+                    ...devs.map((d) =>
+                      hidden(d) ? `${HIDDEN_COL_PX}px` : `minmax(${DEV_COL_MIN_PX}px, 1fr)`,
+                    ),
+                  ].join(" "),
                   gridTemplateRows: [
                     "auto",
                     ...sprintsInYear.map((s) => {
@@ -648,9 +719,42 @@ export function BoardGrid({
                 <div className="board-sticky-col sticky left-0 top-0 z-40 border-b border-r border-grid-line px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Sprint
                 </div>
-                {devs.map((d) => {
+                {devs.map((d, colIndex) => {
                   const team = teamById.get(d.team_id);
                   const availability = formatAvailability(d);
+                  if (hidden(d)) {
+                    // Faixa estreita no lugar do cabeçalho E das células da
+                    // coluna: posicionamento explícito (+2 = coluna Sprint, 1-based)
+                    // e `1 / -1` cobrem todas as linhas explícitas; o
+                    // auto-placement das demais células pula esta coluna. Sem
+                    // soltar card nem coluna aqui.
+                    return (
+                      <div
+                        key={d.id}
+                        style={{ gridColumn: colIndex + 2, gridRow: "1 / -1" }}
+                        className="z-10 flex border-b border-r border-grid-line"
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            visibility.showDev(
+                              d,
+                              devs.filter((x) => x.team_id === d.team_id),
+                            )
+                          }
+                          title={`Exibir ${d.name}`}
+                          aria-label={`Exibir ${d.name}`}
+                          style={{ boxShadow: `inset 0 -3px 0 0 ${team?.color ?? "transparent"}` }}
+                          className="flex w-full min-w-0 flex-col items-center gap-2 overflow-hidden bg-surface-2 py-2 hover:bg-secondary"
+                        >
+                          <EyeOff className="size-3.5 shrink-0 text-muted-foreground" />
+                          <span className="min-h-0 truncate text-[11px] text-muted-foreground [writing-mode:vertical-rl] rotate-180">
+                            {d.name}
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  }
                   const dropSide = columnDrop?.devId === d.id ? columnDrop.side : null;
                   const clearColumnDrag = () => {
                     setDraggingDevId(null);
@@ -664,11 +768,7 @@ export function BoardGrid({
                   return (
                     <Tooltip key={d.id}>
                       <TooltipTrigger asChild>
-                        <button
-                          onClick={() => {
-                            if (!canEdit) return;
-                            setDevDialog({ open: true, dev: d });
-                          }}
+                        <div
                           draggable={canEdit && !reorderDevs.isPending}
                           onDragStart={(e) => {
                             if (!canEdit) return;
@@ -716,7 +816,7 @@ export function BoardGrid({
                           }}
                           onDragEnd={clearColumnDrag}
                           style={{ boxShadow: `inset 0 -3px 0 0 ${team?.color ?? "transparent"}` }}
-                          className={`group sticky top-0 z-30 flex items-center gap-2 overflow-hidden border-b border-r border-grid-line bg-surface-2 px-3 py-2 text-left last:border-r-0 hover:bg-secondary ${
+                          className={`group sticky top-0 z-30 flex overflow-hidden border-b border-r border-grid-line bg-surface-2 last:border-r-0 hover:bg-secondary ${
                             canEdit ? "cursor-grab active:cursor-grabbing" : ""
                           } ${draggingDevId === d.id ? "opacity-50" : ""}`}
                         >
@@ -728,22 +828,48 @@ export function BoardGrid({
                               }`}
                             />
                           ) : null}
-                          <span
-                            className="flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
-                            style={{ backgroundColor: team?.color ?? "#94a3b8" }}
+                          {/* O wrapper `div` leva o arraste e o estilo; o botão
+                              interno abre o diálogo. O olho é irmão dele (não
+                              filho): `<button>` dentro de `<button>` é inválido. */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!canEdit) return;
+                              setDevDialog({ open: true, dev: d });
+                            }}
+                            className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left"
                           >
-                            {d.initials || d.name.slice(0, 2).toUpperCase()}
-                          </span>
-                          <span className="flex min-w-0 flex-col">
-                            <span className="truncate text-sm font-medium">{d.name}</span>
-                            {team ? (
-                              <span className="truncate text-[10px] text-muted-foreground">
-                                {team.name}
-                              </span>
-                            ) : null}
-                          </span>
-                          <Pencil className="ml-auto size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60" />
-                        </button>
+                            <span
+                              className="flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                              style={{ backgroundColor: team?.color ?? "#94a3b8" }}
+                            >
+                              {d.initials || d.name.slice(0, 2).toUpperCase()}
+                            </span>
+                            <span className="flex min-w-0 flex-col">
+                              <span className="truncate text-sm font-medium">{d.name}</span>
+                              {team ? (
+                                <span className="truncate text-[10px] text-muted-foreground">
+                                  {team.name}
+                                </span>
+                              ) : null}
+                            </span>
+                            <Pencil className="ml-auto size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-60" />
+                          </button>
+                          {/* Ocultar a pessoa (#124): vale para leitor e editor. Não
+                              inicia arraste de coluna nem abre o diálogo. */}
+                          <button
+                            type="button"
+                            draggable={false}
+                            aria-label={`Ocultar ${d.name}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              visibility.hideDev(d.id);
+                            }}
+                            className="absolute right-7 top-1/2 -translate-y-1/2 rounded p-0.5 opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-60"
+                          >
+                            <Eye className="size-3.5" />
+                          </button>
+                        </div>
                       </TooltipTrigger>
                       <TooltipContent>
                         {d.name}
@@ -759,7 +885,7 @@ export function BoardGrid({
                   <SprintRow
                     key={s.id}
                     sprint={s}
-                    devs={devs}
+                    devs={visibleDevs}
                     byCell={byCell}
                     weekCount={sprintLayout.get(s.id)?.weekCount ?? 0}
                     hasWeeked={sprintLayout.get(s.id)?.hasWeeked ?? false}
@@ -1055,9 +1181,7 @@ function SprintRow({
               available
                 ? ""
                 : "cursor-not-allowed bg-muted-foreground/40 bg-[repeating-linear-gradient(135deg,transparent_0_6px,color-mix(in_srgb,var(--muted-foreground)_12%,transparent)_6px_7px)]"
-            } ${
-              dragOver === key ? "bg-primary/10 ring-1 ring-inset ring-primary" : ""
-            }`}
+            } ${dragOver === key ? "bg-primary/10 ring-1 ring-inset ring-primary" : ""}`}
           >
             {body}
             {/* :focus-visible em vez de focus-within: foco por clique (ex.: após replicar) não deve manter o botão visível */}
